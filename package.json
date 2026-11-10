@@ -1,0 +1,19 @@
+{
+  "name": "cadence-dev",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "npm --prefix cadence install && npm --prefix dev/mock-ha install",
+    "dev": "concurrently -k -n mock,server,web -c magenta,cyan,green \"npm --prefix dev/mock-ha start\" \"npm --prefix cadence run dev:server\" \"npm --prefix cadence run dev:web\"",
+    "build": "npm --prefix cadence run build",
+    "typecheck": "npm --prefix cadence run typecheck && npm --prefix dev/mock-ha run typecheck",
+    "test": "npm --prefix cadence test",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.0",
+    "concurrently": "10.0.7"
+  }
+}
