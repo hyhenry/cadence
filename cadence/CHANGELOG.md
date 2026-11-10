@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Called "Calendar" everywhere in Home Assistant, including the header on phones.
+- Fixed the top bar overlapping the calendar inside the Home Assistant app on iPhone.
+- Remembers the view you last used (month, week, 3 days, day or agenda) on each device.
+
 ## 0.1.0
 
 - First release: month, week, 3-day, day and agenda views with touch drag, resize and swipe.

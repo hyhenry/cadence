@@ -17,7 +17,7 @@ Requires Home Assistant OS or Supervised, version 2025.4 or newer.
 
 1. In Home Assistant open **Settings → Apps → App store**, then **⋮ → Repositories**.
 2. Add the URL of this repository.
-3. Install **Cadence**, start it, and turn on **Show in sidebar**.
+3. Install **Calendar** (Cadence), start it, and turn on **Show in sidebar**.
 
 See [cadence/DOCS.md](cadence/DOCS.md) for how to use it.
 

@@ -31,3 +31,15 @@ test('outside Home Assistant it follows the device setting', async ({ page }) =>
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
+
+test('inside Home Assistant the top bar is not pushed down or clipped', async ({ page }) => {
+  await page.goto(`${MOCK_URL}/mock/ha-frame?theme=light&token=e2e`);
+  const app = page.frameLocator('iframe[title="Calendar"]');
+  await expect(app.getByTestId('calendar')).toBeVisible();
+  await expect(app.locator('html')).toHaveClass(/embedded/);
+  const bar = await app.locator('.topbar').boundingBox();
+  const title = await app.locator('h1.title').boundingBox();
+  expect(bar!.y).toBe(0);
+  expect(bar!.height).toBeLessThanOrEqual(60);
+  expect(title!.y + title!.height).toBeLessThanOrEqual(bar!.y + bar!.height);
+});

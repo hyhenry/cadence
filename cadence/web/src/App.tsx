@@ -30,6 +30,25 @@ interface ScopeRequest {
   cancel: () => void;
 }
 
+// The last view is remembered per device (a phone and a wall tablet usually
+// want different views), in this browser's storage.
+const VIEW_KEY = 'cadence.lastView';
+function lastView(): ViewName | null {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    return v && v in VIEW_LABELS ? (v as ViewName) : null;
+  } catch {
+    return null;
+  }
+}
+function rememberView(v: string) {
+  try {
+    if (v in VIEW_LABELS) localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* storage unavailable (private mode): just don't remember */
+  }
+}
+
 const isRecurringInstance = (e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
 
 function Shell() {
@@ -65,7 +84,7 @@ function Shell() {
       setCalendars(c);
       setHaConnected(i.connected);
       setFatal(null);
-      setView((v) => v ?? (phone && s.default_view === 'timeGridWeek' ? 'timeGrid3Day' : (s.default_view as ViewName)));
+      setView((v) => v ?? lastView() ?? (phone && s.default_view === 'timeGridWeek' ? 'timeGrid3Day' : (s.default_view as ViewName)));
     } catch (e) {
       setFatal((e as Error).message);
     }
@@ -152,6 +171,7 @@ function Shell() {
   const onDatesSet = useCallback((arg: DatesSetArg) => {
     setTitle(arg.view.title);
     setView(arg.view.type as ViewName);
+    rememberView(arg.view.type);
   }, []);
 
   const tz = info?.time_zone ?? 'UTC';
@@ -459,7 +479,10 @@ function Shell() {
       {scope && <ScopeDialog action={scope.action} allowThis={scope.allowThis} onPick={scope.run} onCancel={scope.cancel} />}
       {overlay?.kind === 'calendar' && <CalendarSheet calendar={overlay.calendar} onClose={() => setOverlay(null)} onChanged={() => void loadCalendars()} />}
       {overlay?.kind === 'add' && <AddCalendarSheet onClose={() => setOverlay(null)} onAdded={() => void loadCalendars()} remoteAvailable={info.remote_calendar} usedColors={calendars.map((c) => c.color)} />}
-      {overlay?.kind === 'settings' && <SettingsSheet info={info} settings={settings} calendars={calendars} onClose={() => setOverlay(null)} onSaved={setSettings} />}
+      {overlay?.kind === 'settings' && <SettingsSheet info={info} settings={settings} calendars={calendars} onClose={() => setOverlay(null)} onSaved={(s) => {
+            if (s.default_view !== settings.default_view && s.default_view in VIEW_LABELS) changeView(s.default_view as ViewName);
+            setSettings(s);
+          }} />}
     </div>
   );
 }

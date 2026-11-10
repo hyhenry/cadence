@@ -65,3 +65,14 @@ test('changes made in Home Assistant appear without reloading', async ({ page })
   await expect(page.locator('.fc-list-event', { hasText: name })).toBeVisible({ timeout: 10_000 });
   void isPhone;
 });
+
+test('the last used view is remembered on this device', async ({ page }) => {
+  await open(page);
+  await setView(page, '3 days');
+  await expect(page.locator('.fc-timeGrid3Day-view')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.fc-timeGrid3Day-view')).toBeVisible();
+  await setView(page, 'Month');
+  await page.reload();
+  await expect(page.locator('.fc-dayGridMonth-view')).toBeVisible();
+});

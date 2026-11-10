@@ -13,7 +13,7 @@ import { eventRoutes } from './routes/events.ts';
 import { reminderRoutes } from './routes/reminders.ts';
 import { Store } from './store/db.ts';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 export interface BuildOptions {
   config: AppConfig;

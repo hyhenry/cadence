@@ -1,7 +1,8 @@
-name: Cadence
-version: "0.1.0"
+# Shown in Home Assistant (app store, sidebar and the mobile header) as "Calendar".
+name: Calendar
+version: "0.1.1"
 slug: cadence
-description: Touch-friendly calendar with reminders and Google/Outlook link calendars
+description: Cadence, a touch-friendly calendar with reminders and Google/Outlook link calendars
 arch:
   - aarch64
   - amd64

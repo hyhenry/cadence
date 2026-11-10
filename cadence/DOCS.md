@@ -23,7 +23,7 @@ keep working with them.
 2. Open the **⋮** menu at the top right, choose **Repositories**, paste the URL of the
    Git repository that contains this app, and select **Add**. The repository must be
    reachable by Home Assistant (a public GitHub repository works).
-3. Close the dialog and reload the store. **Cadence** appears in its own section.
+3. Close the dialog and reload the store. The app appears as **Calendar**.
 4. Open it and select **Install**. Home Assistant builds the app on your device, which
    can take a few minutes on a Raspberry Pi.
 5. Select **Start**, turn on **Show in sidebar**, and open **Calendar** from the sidebar.
