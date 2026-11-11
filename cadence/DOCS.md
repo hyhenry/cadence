@@ -109,9 +109,10 @@ them with the `notify` services you choose.
 
 ## Who can use it
 
-The sidebar entry is shown to administrators only (`panel_admin` defaults to true).
-Cadence acts with the app's own Home Assistant access, which can create and remove
-calendar integrations, so it is not offered to non-admin users.
+Every Home Assistant user can add **Calendar** to their sidebar. The app acts with
+its own Home Assistant access, so any user who can open it can add, change and delete
+events and calendars, including removing a Local or Remote Calendar from Home
+Assistant.
 
 ## Data and privacy
 

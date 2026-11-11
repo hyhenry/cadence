@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Available in the sidebar for all users, not only administrators.
+- No longer marked experimental.
+
 ## 0.1.1
 
 - Called "Calendar" everywhere in Home Assistant, including the header on phones.
