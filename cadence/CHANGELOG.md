@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Fixed the "Lost connection to the calendar. Retrying…" banner staying up for good after the app was left open, for example across a Home Assistant restart or a tablet waking from sleep. Cadence now reconnects on its own and clears the banner once it is back.
+
 ## 0.1.2
 
 - Available in the sidebar for all users, not only administrators.

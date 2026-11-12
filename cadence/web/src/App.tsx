@@ -130,7 +130,7 @@ function Shell() {
             return true;
           });
         } else {
-          // EventSource retries by itself (every ~3 s); only warn if it stays down.
+          // subscribeLive keeps reconnecting (every 3-30 s); only warn if it stays down.
           lostTimer ??= setTimeout(() => setServerReachable(false), 4000);
         }
       },

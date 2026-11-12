@@ -136,9 +136,17 @@ export const api = {
 
 export type LiveEvent = { type: 'calendars' } | { type: 'events'; entity_id?: string } | { type: 'connection'; connected: boolean };
 
-/** Server-sent events with automatic reconnect (EventSource handles retry). */
+/**
+ * Server-sent events that keep reconnecting for as long as the app is open.
+ *
+ * EventSource only retries on its own after a dropped connection. If a
+ * reconnect attempt gets a non-stream answer (HA Ingress returns 401/502 while
+ * HA or the add-on restarts, or a phone wakes from sleep mid-handshake), it
+ * closes for good and never fires `open` again. So when it closes we build a
+ * new one ourselves, backing off from 3 s to 30 s, and retry straight away
+ * when the page becomes visible or the network comes back.
+ */
 export function subscribeLive(onEvent: (e: LiveEvent) => void, onStatus?: (ok: boolean) => void): () => void {
-  const es = new EventSource('api/stream');
   const parse = (ev: MessageEvent) => {
     try {
       return JSON.parse(ev.data);
@@ -146,10 +154,50 @@ export function subscribeLive(onEvent: (e: LiveEvent) => void, onStatus?: (ok: b
       return {};
     }
   };
-  es.addEventListener('calendars', () => onEvent({ type: 'calendars' }));
-  es.addEventListener('events', (ev) => onEvent({ type: 'events', entity_id: parse(ev as MessageEvent).entity_id }));
-  es.addEventListener('connection', (ev) => onEvent({ type: 'connection', connected: !!parse(ev as MessageEvent).connected }));
-  es.onopen = () => onStatus?.(true);
-  es.onerror = () => onStatus?.(false);
-  return () => es.close();
+  let es: EventSource | null = null;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let delay = 3000;
+  let stopped = false;
+
+  const connect = () => {
+    clearTimeout(retry);
+    retry = undefined;
+    es?.close();
+    const src = new EventSource('api/stream');
+    es = src;
+    src.addEventListener('calendars', () => onEvent({ type: 'calendars' }));
+    src.addEventListener('events', (ev) => onEvent({ type: 'events', entity_id: parse(ev as MessageEvent).entity_id }));
+    src.addEventListener('connection', (ev) => onEvent({ type: 'connection', connected: !!parse(ev as MessageEvent).connected }));
+    src.onopen = () => {
+      delay = 3000;
+      onStatus?.(true);
+    };
+    src.onerror = () => {
+      if (src !== es) return;
+      onStatus?.(false);
+      // CONNECTING means the browser is retrying by itself; CLOSED means it gave up.
+      if (src.readyState === EventSource.CLOSED && !stopped && retry === undefined) {
+        retry = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 30_000);
+      }
+    };
+  };
+
+  const nudge = () => {
+    if (stopped || document.visibilityState !== 'visible') return;
+    if (es && es.readyState !== EventSource.CLOSED) return;
+    delay = 3000;
+    connect();
+  };
+
+  connect();
+  document.addEventListener('visibilitychange', nudge);
+  window.addEventListener('online', nudge);
+  return () => {
+    stopped = true;
+    clearTimeout(retry);
+    es?.close();
+    document.removeEventListener('visibilitychange', nudge);
+    window.removeEventListener('online', nudge);
+  };
 }
