@@ -53,6 +53,8 @@ export function Drawer({ open, calendars, info, onClose, onToggle, onEdit, onAdd
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, docked, onClose]);
+  // Docked (wide screens) and hidden by the user: no panel at all.
+  if (docked && !open) return null;
   const mine = calendars.filter((c) => c.can_create);
   const others = calendars.filter((c) => !c.can_create);
   return (

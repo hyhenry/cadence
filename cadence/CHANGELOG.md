@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6
+
+- On wide screens the calendar list can be hidden with the new button left of the month name, giving the calendar the full width. Each device remembers your choice.
+- The month name is bold again.
+- On phones the view picker now looks like the Today button and is the same size.
+- Fixed iPhone zooming into the page when you tap a field in the event editor or open the view picker.
+
 ## 0.1.5
 
 - On narrow screens the calendars button moved to the right end of the top bar and has its own icon, so inside the Home Assistant app it no longer sits right under HA's menu button looking like a second one. The calendar list now slides in from the right.

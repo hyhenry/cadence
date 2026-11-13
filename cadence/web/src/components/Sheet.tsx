@@ -76,6 +76,9 @@ const PATHS: Record<string, string> = {
   // Stacked layers: "which calendars are shown". Deliberately not a hamburger,
   // so it can't be mistaken for Home Assistant's own sidebar button above it.
   layers: 'M12 16 3 9l9-7 9 7Zm0 5.05-9-7 1.65-1.25L12 18.5l7.35-5.7L21 14.05Z',
+  // A window with a side panel: shows / hides the docked calendar list.
+  sidebar: 'M5 21q-.82 0-1.41-.59Q3 19.82 3 19V5q0-.82.59-1.41Q4.18 3 5 3h14q.82 0 1.41.59Q21 4.18 21 5v14q0 .82-.59 1.41Q19.82 21 19 21Zm3-2V5H5v14Zm2 0h9V5h-9Z',
+  unfold: 'M12 21 7.5 16.5l1.45-1.45L12 18.1l3.05-3.05 1.45 1.45ZM8.95 9.45 7.5 8 12 3.5 16.5 8l-1.45 1.45L12 6.4Z',
   left: 'M14 18 8 12l6-6 1.4 1.4-4.6 4.6 4.6 4.6Z',
   right: 'm9.4 18-1.4-1.4 4.6-4.6L8 7.4 9.4 6l6 6Z',
   plus: 'M11 19v-6H5v-2h6V5h2v6h6v2h-6v6Z',

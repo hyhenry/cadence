@@ -236,7 +236,7 @@ kbd {
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-line);
 }
-/* Like HA's own page titles: regular weight; 16px here, 20px (HA's) when wide. */
+/* 16px, or 20px (HA's page-title size) when wide. */
 .title {
   flex: 1;
   font-size: calc(16 / 14 * 1rem);
@@ -244,7 +244,7 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 400;
+  font-weight: 700;
 }
 .nav {
   display: flex;
@@ -254,12 +254,33 @@ kbd {
 .btn.today {
   padding: 0 14px;
 }
-.view-select {
-  min-height: var(--tap);
-  border-radius: 999px;
-  border: 1px solid var(--c-line);
-  background: var(--c-surface);
-  padding: 0 10px;
+/* The view picker looks like the Today button; the native select sits on top,
+   invisible, so a tap opens the system picker. */
+.view-pick {
+  position: relative;
+  padding: 0 10px 0 16px;
+}
+.view-pick svg {
+  margin-right: -2px;
+  opacity: 0.8;
+}
+.view-pick select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px; /* under 16px, iOS zooms the page when it opens */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.view-pick:focus-within {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+.view-pick:has(select:focus:not(:focus-visible)) {
+  outline: none;
 }
 .banner {
   background: #fff4e5;
@@ -963,6 +984,15 @@ textarea {
   }
   .title {
     font-size: calc(20 / 14 * 1rem);
+  }
+}
+/* iOS zooms the page into any field whose text is under 16px when it gets
+   focus, so on touch screens fields keep 16px though the base is HA's 14px. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
   }
 }
 @media (prefers-reduced-motion: reduce) {

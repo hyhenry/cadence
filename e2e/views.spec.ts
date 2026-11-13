@@ -124,3 +124,17 @@ test('the last used view is remembered on this device', async ({ page }) => {
   await page.reload();
   await expect(page.locator('.fc-dayGridMonth-view')).toBeVisible();
 });
+
+test('wide screens: the calendar list can be hidden, and stays hidden', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 0) < 900, 'the list is only docked on wide screens');
+  await open(page);
+  const list = page.getByRole('navigation', { name: 'Calendars' });
+  await expect(list).toBeVisible();
+  await page.getByRole('button', { name: 'Hide calendars' }).click();
+  await expect(list).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('calendar')).toHaveAttribute('aria-busy', 'false');
+  await expect(list).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show calendars' }).click();
+  await expect(list).toBeVisible();
+});

@@ -49,7 +49,24 @@ function rememberView(v: string) {
   }
 }
 
-const isRecurringInstance = (e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
+// Whether the docked calendar list is shown on wide screens, also per device.
+const SIDEBAR_KEY = 'cadence.sidebar';
+function sidebarShown(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== 'hidden';
+  } catch {
+    return true;
+  }
+}
+function rememberSidebar(shown: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, shown ? 'shown' : 'hidden');
+  } catch {
+    /* storage unavailable: just don't remember */
+  }
+}
+
+const isRecurringInstance =(e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
 
 function Shell() {
   const toast = useToast();
@@ -62,6 +79,7 @@ function Shell() {
   const [title, setTitle] = useState('');
   const [view, setView] = useState<ViewName | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebar, setSidebar] = useState(sidebarShown);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [scope, setScope] = useState<ScopeRequest | null>(null);
   const cal = useRef<CalendarHandle>(null);
@@ -152,6 +170,18 @@ function Shell() {
   useEffect(() => {
     cal.current?.refetch();
   }, [calKey]);
+
+  // The calendar list as a docked panel (wide) or a sliding drawer (narrow).
+  const listDocked = wide && sidebar;
+  const showList = () => (wide ? toggleSidebar(true) : setDrawerOpen(true));
+  const toggleSidebar = (shown: boolean) => {
+    setSidebar(shown);
+    rememberSidebar(shown);
+  };
+  // FullCalendar only re-measures on window resizes; tell it the column changed.
+  useEffect(() => {
+    cal.current?.api()?.updateSize();
+  }, [listDocked]);
 
   const changeView = (v: ViewName) => {
     setView(v);
@@ -362,7 +392,7 @@ function Shell() {
   return (
     <div className={`app ${wide ? 'wide' : ''}`}>
       <Drawer
-        open={drawerOpen || wide}
+        open={wide ? sidebar : drawerOpen}
         docked={wide}
         calendars={calendars}
         info={info}
@@ -374,6 +404,11 @@ function Shell() {
       />
       <div className="main">
         <header className="topbar">
+          {wide && (
+            <button type="button" className="icon-btn" aria-label={sidebar ? 'Hide calendars' : 'Show calendars'} aria-expanded={sidebar} onClick={() => toggleSidebar(!sidebar)}>
+              <Icon name="sidebar" />
+            </button>
+          )}
           <h1 className="title" aria-live="polite">
             {title}
           </h1>
@@ -392,13 +427,20 @@ function Shell() {
               </>
             )}
             {!wide ? (
-              <select className="view-select" aria-label="View" value={view} onChange={(e) => changeView(e.target.value as ViewName)}>
-                {(Object.keys(VIEW_LABELS) as ViewName[]).map((v) => (
-                  <option key={v} value={v}>
-                    {VIEW_LABELS[v]}
-                  </option>
-                ))}
-              </select>
+              // Drawn as a button like "Today"; the real <select> lies invisibly on
+              // top so tapping it opens the native picker. (iOS sizes a visible
+              // select its own way, and zooms the page if its text is under 16px.)
+              <span className="btn view-pick">
+                {VIEW_LABELS[view]}
+                <Icon name="unfold" size={18} />
+                <select aria-label="View" value={view} onChange={(e) => changeView(e.target.value as ViewName)}>
+                  {(Object.keys(VIEW_LABELS) as ViewName[]).map((v) => (
+                    <option key={v} value={v}>
+                      {VIEW_LABELS[v]}
+                    </option>
+                  ))}
+                </select>
+              </span>
             ) : (
               <div className="segmented views" role="tablist" aria-label="View">
                 {(Object.keys(VIEW_LABELS) as ViewName[]).map((v) => (
@@ -429,9 +471,9 @@ function Shell() {
         )}
         {calendars.length > 0 && calendars.every((c) => !c.visible) && (
           <div className="empty-state compact">
-            <p>All calendars are hidden.{wide ? ' Tick one in the list to show it.' : ''}</p>
-            {!wide && (
-              <button type="button" className="btn" onClick={() => setDrawerOpen(true)}>
+            <p>All calendars are hidden.{listDocked ? ' Tick one in the list to show it.' : ''}</p>
+            {!listDocked && (
+              <button type="button" className="btn" onClick={showList}>
                 Choose calendars
               </button>
             )}
