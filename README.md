@@ -3,7 +3,7 @@
 A touch-first calendar for Home Assistant, installed as a Home Assistant app. It shows
 up in the sidebar as **Calendar**.
 
-- Month, week, 3-day, day and agenda views with tap-to-create, drag, resize and swipe.
+- Month, week, 3-day, day and agenda views with touch-and-hold to create, drag, resize and swipe.
 - Works with every `calendar.*` entity you already have; new calendars are ordinary
   Local Calendars, so automations and dashboards keep working.
 - Subscribe to Google (secret iCal address), Outlook and other iCal calendars through

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { haCommand, open, setView, touchDrag } from './helpers.ts';
+import { haCommand, open, setView, touchDrag, touchPath } from './helpers.ts';
 
 const uniq = (base: string) => `${base} ${test.info().project.name} ${Date.now() % 100000}`;
 
@@ -11,15 +11,20 @@ async function gotoDay(page: Page, offsetDays: number) {
 async function createAt(page: Page, title: string, slotTime = '10:00:00') {
   const slot = page.locator(`td.fc-timegrid-slot-lane[data-time="${slotTime}"]`);
   await slot.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  // Let the scroll event pass first: a scroll during a touch cancels the press.
+  await page.waitForTimeout(150);
   const box = (await slot.boundingBox())!;
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  // Press in today's column (week views), so what follows doesn't depend on the weekday.
+  const today = await page.locator('.fc-timegrid-col.fc-day-today').boundingBox();
+  const at = { x: today ? today.x + today.width / 2 : box.x + box.width / 2, y: box.y + box.height / 2 };
+  await touchDrag(page, at, at, { holdMs: 650, steps: 0 });
   const dialog = page.getByRole('dialog', { name: 'New event' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Title').fill(title);
   return dialog;
 }
 
-test('tap an empty slot to create, then edit and delete', async ({ page }) => {
+test('long-press an empty slot to create, then edit and delete', async ({ page }) => {
   await open(page);
   await setView(page, 'Day');
   await page.getByRole('button', { name: 'Next' }).or(page.locator('h1.title')).first().waitFor();
@@ -96,7 +101,7 @@ test('touch drag moves an event (long press, then drag)', async ({ page }) => {
   const box = (await ev.boundingBox())!;
   const slotH = (await page.locator('td.fc-timegrid-slot-lane[data-time="13:00:00"]').boundingBox())!.height;
   // Two hours later = four 30-minute slots.
-  await touchDrag(page, { x: box.x + box.width / 2, y: box.y + 8 }, { x: box.x + box.width / 2, y: box.y + 8 + slotH * 4 - 6 }, { holdMs: 450, steps: 16 });
+  await touchDrag(page, { x: box.x + box.width / 2, y: box.y + 8 }, { x: box.x + box.width / 2, y: box.y + 8 + slotH * 4 - 6 }, { holdMs: 650, steps: 16 });
   await expect(page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name })).toContainText('3pm', { timeout: 8000 });
   // Persisted in HA: reload and check again.
   await page.reload();
@@ -117,13 +122,88 @@ test('touch resize: long-press to select, then drag the handle', async ({ page }
   await expect(ev).not.toHaveClass(/ev-pending/);
   const box = (await ev.boundingBox())!;
   const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await touchDrag(page, centre, centre, { holdMs: 450, steps: 1 });
+  await touchDrag(page, centre, centre, { holdMs: 650, steps: 1 });
   await expect(ev).toHaveClass(/fc-event-selected/);
   const handle = ev.locator('.fc-event-resizer-end');
   const hb = (await handle.boundingBox())!;
   const slotH = (await page.locator(`td.fc-timegrid-slot-lane[data-time="${slotTime}"]`).boundingBox())!.height;
   await touchDrag(page, { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 + slotH * 2 - 4 }, { steps: 10 });
   await expect(page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name })).toContainText(tablet ? /11(am)? - 1pm/ : /8(pm)? - 10pm/, { timeout: 8000 });
+});
+
+test('a tap on an empty slot does not create an event (touch)', async ({ page }) => {
+  await open(page);
+  await setView(page, 'Day');
+  const slot = page.locator('td.fc-timegrid-slot-lane[data-time="10:00:00"]');
+  await slot.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const box = (await slot.boundingBox())!;
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(600);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('month view: touch and hold a day to create an all-day event', async ({ page }) => {
+  await open(page);
+  await setView(page, 'Month');
+  // A day with nothing on it, so the hold lands on the day and not an event.
+  const days = page.locator('td.fc-daygrid-day:not(.fc-day-other)');
+  const n = await days.count();
+  let target = null;
+  for (let i = n - 1; i >= 0; i--) {
+    if ((await days.nth(i).locator('.fc-event').count()) === 0) {
+      target = days.nth(i);
+      break;
+    }
+  }
+  const box = (await target!.boundingBox())!;
+  // Below the day number (a tap there opens the day).
+  const at = { x: box.x + box.width / 2, y: box.y + box.height * 0.7 };
+  await page.touchscreen.tap(at.x, at.y);
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('dialog'), 'a tap does not create').toHaveCount(0);
+  await touchDrag(page, at, at, { holdMs: 650, steps: 0 });
+  const dialog = page.getByRole('dialog', { name: 'New event' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('All day')).toBeChecked();
+});
+
+test('moving first, then resting, does not pick up an event or open it', async ({ page }) => {
+  await open(page);
+  await setView(page, 'Day');
+  const name = uniq('Stay put');
+  const tablet = test.info().project.name === 'tablet';
+  const slotTime = tablet ? '17:00:00' : '18:00:00';
+  const dialog = await createAt(page, name, slotTime);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const ev = page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name });
+  await expect(ev).not.toHaveClass(/ev-pending/);
+  const before = (await ev.textContent())!;
+  const box = (await ev.boundingBox())!;
+  const slotH = (await page.locator(`td.fc-timegrid-slot-lane[data-time="${slotTime}"]`).boundingBox())!.height;
+  const x = box.x + box.width / 2;
+  const y = box.y + 8;
+  // A little sideways (a slow swipe that changes its mind), rest past the
+  // long-press delay, then pull down two hours' worth. Before, the rest made
+  // FullCalendar pick the event up and the pull moved it.
+  await touchPath(page, [{ x, y }, { x: x - 6, y }, { x: x - 14, y: y + 1 }, { x: x - 16, y: y + 1, wait: 800 }, { x: x - 16, y: y + slotH * 2, wait: 30 }, { x: x - 16, y: y + slotH * 4, wait: 30 }]);
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name })).toHaveText(before);
+});
+
+test('moving first, then resting, over empty slots does not create', async ({ page }) => {
+  await open(page);
+  await setView(page, 'Week');
+  const slot = page.locator('td.fc-timegrid-slot-lane[data-time="09:00:00"]');
+  await slot.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(150);
+  const box = (await slot.boundingBox())!;
+  const x = box.x + box.width * 0.6;
+  const y = box.y + box.height / 2;
+  await touchPath(page, [{ x, y }, { x: x - 8, y }, { x: x - 16, y: y + 1 }, { x: x - 18, y: y + 1, wait: 800 }, { x: x - 18, y: y + 80, wait: 30 }]);
+  await page.waitForTimeout(400);
+  await expect(page.locator('.fc-highlight')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('a change Home Assistant rejects is rolled back with a message', async ({ page }) => {

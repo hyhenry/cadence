@@ -55,6 +55,31 @@ export async function touchDrag(page: Page, from: { x: number; y: number }, to: 
   );
 }
 
+/**
+ * A touch along a path of points (touchstart at the first, touchend at the
+ * last), waiting `wait` ms before each move with the finger still down.
+ */
+export async function touchPath(page: Page, points: { x: number; y: number; wait?: number }[]) {
+  await page.evaluate(async (points) => {
+    const target = document.elementFromPoint(points[0].x, points[0].y);
+    if (!target) throw new Error('nothing under the finger');
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const fire = (type: string, x: number, y: number) => {
+      const t = new Touch({ identifier: 1, target, clientX: x, clientY: y, pageX: x + window.scrollX, pageY: y + window.scrollY, screenX: x, screenY: y, radiusX: 4, radiusY: 4, force: 1 });
+      const active = type === 'touchend' ? [] : [t];
+      target.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, composed: true, touches: active, targetTouches: active, changedTouches: [t] }));
+    };
+    fire('touchstart', points[0].x, points[0].y);
+    for (const p of points.slice(1)) {
+      await sleep(p.wait ?? 16);
+      fire('touchmove', p.x, p.y);
+    }
+    await sleep(16);
+    const last = points[points.length - 1];
+    fire('touchend', last.x, last.y);
+  }, points);
+}
+
 /** Talk to the mock's HA websocket directly (to simulate changes made in HA). */
 export async function haCommand(msg: Record<string, unknown>): Promise<any> {
   const ws = new WebSocket(`${MOCK_URL.replace('http', 'ws')}/api/websocket`);

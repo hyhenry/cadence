@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { closeDrawer, haCommand, isPhone, open, openDrawer, setView, touchDrag } from './helpers.ts';
+import { closeDrawer, haCommand, isPhone, open, openDrawer, setView, touchDrag, touchPath } from './helpers.ts';
 
 test('loads through the ingress prefix with relative paths', async ({ page }) => {
   const bad: string[] = [];
@@ -40,6 +40,54 @@ test('swipe changes the period and Today comes back', async ({ page }) => {
   await expect(page.getByRole('dialog'), 'a swipe is not a tap').toHaveCount(0);
   await page.getByRole('button', { name: 'Today' }).click();
   await expect(title).toHaveText(before);
+});
+
+test('the view follows the finger, and a short swipe springs back', async ({ page }) => {
+  await open(page);
+  await setView(page, 'Week');
+  const firstDay = page.locator('.fc-col-header-cell').first();
+  const before = await firstDay.getAttribute('data-date');
+  const harness = page.locator('.fc-view-harness');
+  const box = (await harness.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + 220;
+  // Drag 60px and check the view moved with the finger before letting go.
+  const moved = page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        const h = document.querySelector<HTMLElement>('.fc-view-harness')!;
+        const obs = new MutationObserver(() => {
+          if (h.style.transform.includes('translate3d(-')) {
+            obs.disconnect();
+            resolve(h.style.transform);
+          }
+        });
+        obs.observe(h, { attributes: true, attributeFilter: ['style'] });
+      }),
+  );
+  await touchPath(page, [{ x, y }, { x: x - 20, y, wait: 40 }, { x: x - 40, y, wait: 40 }, { x: x - 60, y, wait: 40 }, { x: x - 60, y, wait: 200 }]);
+  expect(await moved).toMatch(/translate3d\(-\d+/);
+  await expect(harness).toHaveAttribute('style', /^(?!.*translate3d\(-)/);
+  expect(await firstDay.getAttribute('data-date')).toBe(before);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('in the 3-day view a swipe moves by the days dragged', async ({ page }) => {
+  await open(page);
+  await setView(page, '3 days');
+  const cols = page.locator('.fc-col-header-cell');
+  const before = (await cols.first().getAttribute('data-date'))!;
+  const col = (await page.locator('.fc-timegrid-col.fc-day').first().boundingBox())!;
+  const box = (await page.locator('.fc-view-harness').boundingBox())!;
+  const y = box.y + 220;
+  const x = box.x + box.width - 10;
+  // About two columns, slowly (no fling), then rest before lifting.
+  const pts = [{ x, y }];
+  for (let i = 1; i <= 10; i++) pts.push({ x: x - (col.width * 2 * i) / 10, y, wait: 30 });
+  pts.push({ x: x - col.width * 2, y, wait: 150 });
+  await touchPath(page, pts);
+  const expected = new Date(Date.parse(before + 'T12:00:00Z') + 2 * 86_400_000).toISOString().slice(0, 10);
+  await expect(cols.first()).toHaveAttribute('data-date', expected);
 });
 
 test('calendar toggles hide and show events', async ({ page }) => {

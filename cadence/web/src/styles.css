@@ -832,6 +832,12 @@ textarea {
 .calendar-wrap {
   flex: 1;
   min-height: 0;
+  /* Vertical scrolling stays native; horizontal moves are ours (swipe). */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  /* No iOS callout or loupe during a long press. */
+  -webkit-touch-callout: none;
   background: var(--c-surface);
   --fc-border-color: var(--c-line);
   --fc-page-bg-color: var(--c-surface);
@@ -929,25 +935,6 @@ textarea {
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.85);
 }
-.swipe-left {
-  animation: swipe-l 0.22s ease;
-}
-.swipe-right {
-  animation: swipe-r 0.22s ease;
-}
-@keyframes swipe-l {
-  from {
-    transform: translateX(24px);
-    opacity: 0.4;
-  }
-}
-@keyframes swipe-r {
-  from {
-    transform: translateX(-24px);
-    opacity: 0.4;
-  }
-}
-
 /* ---------- breakpoints ---------- */
 @media (max-width: 599px) {
   .title {

@@ -43,11 +43,11 @@ Supervisor gives it.
 
 | To… | Do this |
 |---|---|
-| Create an event | Tap an empty time slot, or the **+** button. Long-press and drag across slots to pick a longer time. In month view, tap a day. |
+| Create an event | Touch and hold an empty time slot, or tap the **+** button. Hold, then drag across slots to pick a longer time. In month view, touch and hold a day. With a mouse, click instead. |
 | Edit or delete an event | Tap it. |
-| Move an event | Long-press it, then drag. |
-| Change how long it lasts | Long-press to select it, then drag the handle at its bottom edge. |
-| Go to the next or previous period | Swipe left or right, or use the arrows on a larger screen. |
+| Move an event | Touch and hold it until it lifts, then drag. |
+| Change how long it lasts | Touch and hold to select it, then drag the handle at its bottom edge. |
+| Go to the next or previous period | Swipe left or right; the view follows your finger. In the 3-day view, it moves by as many days as you swipe. On a larger screen you can also use the arrows. |
 | Jump back | Tap **Today**. |
 | Show or hide a calendar | Tap it in the calendar list. |
 

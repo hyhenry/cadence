@@ -7,7 +7,7 @@ import listPlugin from '@fullcalendar/list';
 import luxonPlugin from '@fullcalendar/luxon3';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { api, type CadenceEvent, type Calendar } from '../api/client.ts';
 import { textOn } from '../util/color.ts';
 
@@ -51,6 +51,36 @@ interface Props {
   onLoadError: (message: string) => void;
 }
 
+/** How long a finger must rest before a touch creates or picks up an event. */
+const HOLD_MS = 500;
+/** How far a finger may wander before the touch counts as a swipe or scroll. */
+const SLOP = 10;
+const CACHE_MS = 5 * 60_000;
+
+interface Gesture {
+  x0: number;
+  y0: number;
+  lastX: number;
+  lastT: number;
+  /** Horizontal offset the view is dragged by (swipe only). */
+  dx: number;
+  /** Horizontal finger speed in px/ms. */
+  vx: number;
+  mode: 'pending' | 'press' | 'swipe' | 'scroll';
+  timer: number;
+  raf: number;
+  harness?: HTMLElement;
+  width: number;
+  /** Distance that moves the view by one increment. */
+  step: number;
+  maxSteps: number;
+  fade: boolean;
+  /** Navigate by days (3-day view) rather than with next()/prev(). */
+  byDays: boolean;
+}
+
+const isTouch = (e: Event | undefined | null) => !!e && e.type.startsWith('touch');
+
 export function eventKey(e: Pick<CadenceEvent, 'entity_id' | 'uid' | 'recurrence_id' | 'start' | 'summary'>): string {
   return `${e.entity_id}|${e.uid ?? e.summary}|${e.recurrence_id ?? ''}|${e.start}`;
 }
@@ -89,14 +119,18 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
   const doRefetch = () => {
     const capi = fc.current?.getApi();
     if (!capi) return;
+    dropCache();
     if (dragging.current || pressing.current) deferred.current = true;
     else capi.refetchEvents();
   };
   const flushDeferred = () => {
     if (dragging.current || pressing.current || !deferred.current) return;
     deferred.current = false;
+    dropCache();
     fc.current?.getApi().refetchEvents();
   };
+  /** Drop FullCalendar's touch "selected event" (armed to drag without a long press). */
+  const unselectEvent = () => (fc.current?.getApi() as unknown as { dispatch?: (a: { type: string }) => void } | undefined)?.dispatch?.({ type: 'UNSELECT_EVENT' });
   const dragEnded = () =>
     setTimeout(() => {
       dragging.current = false;
@@ -110,26 +144,52 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
     pressing.current = false;
     setTimeout(flushDeferred, 400);
   };
-  const touch = useRef<{ x: number; y: number; t: number } | null>(null);
-  /** The current touch has moved (a swipe or scroll), so it is not a tap. */
-  const moved = useRef(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const gesture = useRef<Gesture | null>(null);
+  /** Swallow the click a browser may send at the end of a swipe. */
+  const suppressClickUntil = useRef(0);
 
   const visibleIds = useMemo(() => props.calendars.filter((c) => c.visible).map((c) => c.entity_id), [props.calendars]);
   const visibleRef = useRef(visibleIds);
   visibleRef.current = visibleIds;
 
+  // Events for a window around what is on screen, so swiping to the next or
+  // previous period shows its events straight away. Dropped on every refetch.
+  const cache = useRef<{ key: string; start: number; end: number; at: number; events: CadenceEvent[] } | null>(null);
+  const cacheGen = useRef(0);
+  const dropCache = () => {
+    cacheGen.current++;
+    cache.current = null;
+  };
+
   const fetchEvents = useCallback((info: { startStr: string; endStr: string }, success: (e: EventInput[]) => void, failure: (e: Error) => void) => {
     const ids = visibleRef.current;
     if (!ids.length) return success([]);
+    const toInputs = (evs: CadenceEvent[]) => {
+      const byId = new Map(propsRef.current.calendars.map((c) => [c.entity_id, c]));
+      return evs.map((e) => toFc(e, byId.get(e.entity_id)));
+    };
+    const key = ids.join(',');
+    const s = Date.parse(info.startStr);
+    const e = Date.parse(info.endStr);
+    const c = cache.current;
+    if (c && c.key === key && s >= c.start && e <= c.end && Date.now() - c.at < CACHE_MS) return success(toInputs(c.events));
+    // Fetch one extra period on each side.
+    const span = e - s;
+    const from = s - span;
+    const to = e + span;
+    const gen = cacheGen.current;
     api
-      .events(info.startStr, info.endStr, ids)
+      .events(new Date(from).toISOString(), new Date(to).toISOString(), ids)
       .then((r) => {
-        const byId = new Map(propsRef.current.calendars.map((c) => [c.entity_id, c]));
         if (r.errors.length) {
+          const byId = new Map(propsRef.current.calendars.map((c) => [c.entity_id, c]));
           const names = r.errors.map((e) => byId.get(e.entity_id)?.name ?? e.entity_id).join(', ');
           propsRef.current.onLoadError(`Could not load ${names}.`);
+        } else if (gen === cacheGen.current) {
+          cache.current = { key, start: from, end: to, at: Date.now(), events: r.events };
         }
-        success(r.events.map((e) => toFc(e, byId.get(e.entity_id))));
+        success(toInputs(r.events));
       })
       .catch((err: Error) => {
         propsRef.current.onLoadError(err.message);
@@ -176,44 +236,246 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
 
   const onMove = (arg: EventDropArg | EventResizeDoneArg) => {
     const e = arg.event.extendedProps.cadence as CadenceEvent;
+    // Once moved, the event should need a fresh long press before it moves again.
+    setTimeout(unselectEvent, 0);
     propsRef.current.onMove({ event: e, start: arg.event.startStr, end: arg.event.endStr || arg.event.startStr, allDay: arg.event.allDay, revert: arg.revert });
   };
 
-  const onTouchStart = (ev: React.TouchEvent) => {
-    pressStart(ev.target);
-    moved.current = false;
-    if (ev.touches.length !== 1) return (touch.current = null);
-    touch.current = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() };
-  };
-  const onTouchMove = (ev: React.TouchEvent) => {
-    const s = touch.current;
-    if (s && (Math.abs(ev.touches[0].clientX - s.x) > 10 || Math.abs(ev.touches[0].clientY - s.y) > 10)) moved.current = true;
-  };
-  const onTouchEnd = (ev: React.TouchEvent) => {
-    pressEnd();
-    const s = touch.current;
-    touch.current = null;
-    if (!s || dragging.current) return;
-    const dx = ev.changedTouches[0].clientX - s.x;
-    const dy = ev.changedTouches[0].clientY - s.y;
-    if (Date.now() - s.t > 700 || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-    const capi = fc.current?.getApi();
-    if (!capi) return;
-    const el = (ev.currentTarget as HTMLElement).querySelector('.fc-view-harness');
-    el?.classList.remove('swipe-left', 'swipe-right');
-    void (el as HTMLElement | null)?.offsetWidth;
-    el?.classList.add(dx < 0 ? 'swipe-left' : 'swipe-right');
-    if (dx < 0) capi.next();
-    else capi.prev();
-  };
+  // Touch gestures. Every touch starts "pending". Holding still for HOLD_MS makes
+  // it a press, which FullCalendar turns into a selection (create) or an event
+  // drag. Moving first makes it a swipe (horizontal, follows the finger and
+  // changes the period) or a scroll, and FullCalendar's pending press is
+  // cancelled. FullCalendar only cancels it on a real scroll, so a slow
+  // sideways swipe used to pick up events and open the editor.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    // FullCalendar drops a pending long press, and won't fire dateClick, when
+    // it sees a scroll event during the touch. Tell it the touch is not a press.
+    const cancelFcPress = () => window.dispatchEvent(new Event('scroll'));
+
+    const frame = (g: Gesture) => {
+      g.raf = 0;
+      if (!g.harness) return;
+      const fade = g.fade ? 1 - Math.min(0.5, (Math.abs(g.dx) / g.width) * 0.6) : 1;
+      g.harness.style.transform = `translate3d(${g.dx}px,0,0)`;
+      g.harness.style.opacity = String(fade);
+    };
+
+    const beginSwipe = (g: Gesture) => {
+      const capi = fc.current?.getApi();
+      const harness = wrap.querySelector<HTMLElement>('.fc-view-harness');
+      if (!capi || !harness) return;
+      capi.unselect();
+      const width = harness.clientWidth || 1;
+      const type = capi.view.type;
+      g.harness = harness;
+      g.width = width;
+      g.step = width;
+      g.maxSteps = 1;
+      g.fade = true;
+      g.byDays = false;
+      if (type === 'timeGrid3Day') {
+        // Moves a day at a time: slide by one day column, and keep it seamless.
+        const col = harness.querySelector<HTMLElement>('.fc-timegrid-col.fc-day');
+        g.step = col?.offsetWidth || width / 3;
+        g.maxSteps = 3;
+        g.fade = false;
+        g.byDays = true;
+      }
+      harness.style.transition = 'none';
+      harness.style.willChange = 'transform, opacity';
+    };
+
+    const clearHarness = (h: HTMLElement) => {
+      h.style.transition = '';
+      h.style.transform = '';
+      h.style.opacity = '';
+      h.style.willChange = '';
+    };
+
+    const animate = (h: HTMLElement, transform: string, opacity: string, ms: number, then: () => void) => {
+      h.style.transition = `transform ${ms}ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity ${ms}ms ease-out`;
+      h.style.transform = transform;
+      h.style.opacity = opacity;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        h.removeEventListener('transitionend', finish);
+        then();
+      };
+      h.addEventListener('transitionend', finish);
+      setTimeout(finish, ms + 60);
+    };
+
+    const endSwipe = (g: Gesture) => {
+      if (g.raf) cancelAnimationFrame(g.raf);
+      const h = g.harness;
+      const capi = fc.current?.getApi();
+      if (!h || !capi) return;
+      const dist = Math.abs(g.dx);
+      const flung = Math.abs(g.vx) > 0.35 && Math.sign(g.vx) === Math.sign(g.dx) && dist > 24;
+      const steps = Math.min(g.maxSteps, Math.max(flung ? 1 : 0, Math.round(dist / g.step + (g.byDays ? 0 : 0.15))));
+      if (!steps) {
+        animate(h, 'translate3d(0,0,0)', '1', 180, () => clearHarness(h));
+        return;
+      }
+      const dir = g.dx < 0 ? 1 : -1; // 1 = forward in time
+      const go = () => {
+        if (g.byDays) capi.incrementDate({ days: dir * steps });
+        else if (dir > 0) capi.next();
+        else capi.prev();
+        unselectEvent();
+      };
+      if (reduceMotion?.matches) {
+        go();
+        clearHarness(h);
+        return;
+      }
+      const target = -dir * steps * g.step;
+      // Finish at least as fast as the finger was moving.
+      const speed = Math.max(Math.abs(g.vx), 1.2);
+      const ms = Math.round(Math.min(220, Math.max(90, Math.abs(target - g.dx) / speed)));
+      animate(h, `translate3d(${target}px,0,0)`, g.fade ? '0.4' : '1', ms, () => {
+        h.style.transition = 'none';
+        go();
+        if (g.byDays) {
+          // The new range lines up exactly with where the old one stopped.
+          clearHarness(h);
+          return;
+        }
+        h.style.transform = `translate3d(${dir * g.width * 0.3}px,0,0)`;
+        h.style.opacity = '0.4';
+        requestAnimationFrame(() => animate(h, 'translate3d(0,0,0)', '1', 200, () => clearHarness(h)));
+      });
+    };
+
+    const onStart = (ev: TouchEvent) => {
+      pressStart(ev.target);
+      const prev = gesture.current;
+      if (prev) {
+        clearTimeout(prev.timer);
+        if (prev.mode === 'swipe') endSwipe({ ...prev, dx: 0, vx: 0 });
+      }
+      if (ev.touches.length !== 1) {
+        // A second finger: not a press, not a swipe.
+        if (prev?.mode === 'pending') cancelFcPress();
+        gesture.current = null;
+        return;
+      }
+      const t = ev.touches[0];
+      const now = performance.now();
+      const g: Gesture = {
+        x0: t.clientX,
+        y0: t.clientY,
+        lastX: t.clientX,
+        lastT: now,
+        dx: 0,
+        vx: 0,
+        mode: 'pending',
+        timer: 0,
+        raf: 0,
+        width: 1,
+        step: 1,
+        maxSteps: 1,
+        fade: true,
+        byDays: false,
+      };
+      // A little before FullCalendar's own timer, so a move in between is never
+      // taken as a swipe while FullCalendar has started a drag.
+      g.timer = window.setTimeout(() => {
+        if (gesture.current === g && g.mode === 'pending') {
+          g.mode = 'press';
+          const el = ev.target as Element | null;
+          if (!el?.closest?.('.fc-list, .ev-readonly, .fc-col-header, .fc-timegrid-axis')) navigator.vibrate?.(8);
+        }
+      }, HOLD_MS - 40);
+      gesture.current = g;
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      const g = gesture.current;
+      if (!g || ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      const dx = t.clientX - g.x0;
+      const dy = t.clientY - g.y0;
+      const now = performance.now();
+      const dt = now - g.lastT;
+      if (dt > 0) g.vx = 0.7 * ((t.clientX - g.lastX) / dt) + 0.3 * g.vx;
+      g.lastX = t.clientX;
+      g.lastT = now;
+      if (g.mode === 'pending') {
+        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+        clearTimeout(g.timer);
+        if (dragging.current) {
+          // FullCalendar is already dragging (an event that was selected).
+          g.mode = 'press';
+          return;
+        }
+        cancelFcPress();
+        unselectEvent();
+        g.mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'scroll';
+        if (g.mode === 'swipe') {
+          beginSwipe(g);
+          // Start tracking from here so the content doesn't jump by the slop.
+          g.x0 = t.clientX - Math.sign(dx) * SLOP;
+        }
+      }
+      if (g.mode === 'swipe') {
+        if (ev.cancelable) ev.preventDefault();
+        g.dx = t.clientX - g.x0;
+        if (!g.raf) g.raf = requestAnimationFrame(() => frame(g));
+      }
+    };
+
+    const onEnd = (ev: TouchEvent) => {
+      pressEnd();
+      const g = gesture.current;
+      if (!g || ev.touches.length) return;
+      clearTimeout(g.timer);
+      gesture.current = null;
+      if (g.mode === 'swipe') {
+        // Velocity is stale if the finger paused before lifting.
+        if (performance.now() - g.lastT > 80) g.vx = 0;
+        suppressClickUntil.current = performance.now() + 400;
+        endSwipe(g);
+      } else if (g.mode === 'press' && !(ev.target as Element | null)?.closest?.('.fc-list')) {
+        // A hold is never also a tap: some browsers send a click when the finger
+        // lifts, which would open the editor over the resize handles.
+        suppressClickUntil.current = performance.now() + 400;
+      }
+    };
+
+    const onClick = (ev: MouseEvent) => {
+      if (performance.now() < suppressClickUntil.current) {
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+    };
+
+    // Capture phase: we see each touch before FullCalendar's own handlers.
+    wrap.addEventListener('touchstart', onStart, { capture: true, passive: true });
+    wrap.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    wrap.addEventListener('touchend', onEnd, { capture: true, passive: true });
+    wrap.addEventListener('touchcancel', onEnd, { capture: true, passive: true });
+    wrap.addEventListener('click', onClick, true);
+    return () => {
+      wrap.removeEventListener('touchstart', onStart, true);
+      wrap.removeEventListener('touchmove', onTouchMove, true);
+      wrap.removeEventListener('touchend', onEnd, true);
+      wrap.removeEventListener('touchcancel', onEnd, true);
+      wrap.removeEventListener('click', onClick, true);
+    };
+    // Everything it reads is a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
+      ref={wrapRef}
       className="calendar-wrap"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={pressEnd}
       onMouseDown={(e) => pressStart(e.target)}
       onMouseUp={pressEnd}
       data-testid="calendar"
@@ -262,9 +524,9 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
         selectable
         selectMirror
         unselectAuto
-        eventLongPressDelay={300}
-        selectLongPressDelay={300}
-        longPressDelay={300}
+        eventLongPressDelay={HOLD_MS}
+        selectLongPressDelay={HOLD_MS}
+        longPressDelay={HOLD_MS}
         dragScroll
         slotDuration="00:30:00"
         snapDuration="00:15:00"
@@ -279,8 +541,10 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
           propsRef.current.onEventTap(arg.event.extendedProps.cadence as CadenceEvent);
         }}
         dateClick={(arg: DateClickArg) => {
-          if (moved.current) return; // end of a swipe, not a tap
-          // Tapping an empty slot creates an event there (month view: on that day).
+          // On touch, creating takes a long press (see `select`): a tap is too easy
+          // to land by accident while scrolling or swiping.
+          if (isTouch(arg.jsEvent)) return;
+          // Clicking an empty slot creates an event there (month view: on that day).
           if (arg.view.type === 'dayGridMonth') {
             propsRef.current.onCreate(arg.dateStr, arg.dateStr, true);
             return;
@@ -288,10 +552,17 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
           propsRef.current.onCreate(arg.dateStr, '', arg.allDay);
         }}
         select={(arg: DateSelectArg) => {
-          // A plain tap also fires `select` for one slot; let dateClick handle that.
           const ms = arg.end.getTime() - arg.start.getTime();
-          if (!arg.allDay && ms <= 30 * 60_000) return;
-          if (arg.allDay && ms <= 86_400_000 && arg.view.type === 'dayGridMonth') return;
+          const single = arg.allDay ? ms <= 86_400_000 : ms <= 30 * 60_000;
+          if (isTouch(arg.jsEvent) && single) {
+            // Long press and let go: a new event of the default length there.
+            propsRef.current.onCreate(arg.startStr, arg.allDay ? arg.startStr : '', arg.allDay);
+            fc.current?.getApi().unselect();
+            return;
+          }
+          // A plain click also fires `select` for one slot; let dateClick handle that.
+          if (!arg.allDay && single) return;
+          if (arg.allDay && single && arg.view.type === 'dayGridMonth') return;
           propsRef.current.onCreate(arg.startStr, arg.endStr, arg.allDay);
           fc.current?.getApi().unselect();
         }}
