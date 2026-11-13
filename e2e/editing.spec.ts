@@ -1,12 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { haCommand, open, setView, touchDrag, touchPath } from './helpers.ts';
+import { haCommand, open, ownDay, setView, touchDrag, touchPath } from './helpers.ts';
 
 const uniq = (base: string) => `${base} ${test.info().project.name} ${Date.now() % 100000}`;
-
-async function gotoDay(page: Page, offsetDays: number) {
-  await setView(page, 'Day');
-  for (let i = 0; i < offsetDays; i++) await page.locator('.fc-view-harness').evaluate(() => undefined), await page.keyboard.press('ArrowRight');
-}
 
 async function createAt(page: Page, title: string, slotTime = '10:00:00') {
   const slot = page.locator(`td.fc-timegrid-slot-lane[data-time="${slotTime}"]`);
@@ -25,6 +20,7 @@ async function createAt(page: Page, title: string, slotTime = '10:00:00') {
 }
 
 test('long-press an empty slot to create, then edit and delete', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   await page.getByRole('button', { name: 'Next' }).or(page.locator('h1.title')).first().waitFor();
@@ -55,6 +51,7 @@ test('long-press an empty slot to create, then edit and delete', async ({ page }
 });
 
 test('all-day event from the editor', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Holiday');
@@ -66,6 +63,7 @@ test('all-day event from the editor', async ({ page }) => {
 });
 
 test('recurring event: delete one occurrence, then all', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Week');
   const name = uniq('Practice');
@@ -90,6 +88,7 @@ test('recurring event: delete one occurrence, then all', async ({ page }) => {
 });
 
 test('touch drag moves an event (long press, then drag)', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Drag me');
@@ -110,12 +109,11 @@ test('touch drag moves an event (long press, then drag)', async ({ page }) => {
 });
 
 test('touch resize: long-press to select, then drag the handle', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Resize me');
-  // Both projects share one mock HA, so use a different slot per project.
-  const tablet = test.info().project.name === 'tablet';
-  const slotTime = tablet ? '11:00:00' : '20:00:00';
+  const slotTime = '11:00:00';
   const dialog = await createAt(page, name, slotTime);
   await dialog.getByRole('button', { name: 'Save' }).click();
   const ev = page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name });
@@ -128,10 +126,11 @@ test('touch resize: long-press to select, then drag the handle', async ({ page }
   const hb = (await handle.boundingBox())!;
   const slotH = (await page.locator(`td.fc-timegrid-slot-lane[data-time="${slotTime}"]`).boundingBox())!.height;
   await touchDrag(page, { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 }, { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 + slotH * 2 - 4 }, { steps: 10 });
-  await expect(page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name })).toContainText(tablet ? /11(am)? - 1pm/ : /8(pm)? - 10pm/, { timeout: 8000 });
+  await expect(page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name })).toContainText(/11(am)? - 1pm/, { timeout: 8000 });
 });
 
 test('a tap on an empty slot does not create an event (touch)', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const slot = page.locator('td.fc-timegrid-slot-lane[data-time="10:00:00"]');
@@ -143,6 +142,7 @@ test('a tap on an empty slot does not create an event (touch)', async ({ page })
 });
 
 test('month view: touch and hold a day to create an all-day event', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Month');
   // A day with nothing on it, so the hold lands on the day and not an event.
@@ -168,11 +168,11 @@ test('month view: touch and hold a day to create an all-day event', async ({ pag
 });
 
 test('moving first, then resting, does not pick up an event or open it', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Stay put');
-  const tablet = test.info().project.name === 'tablet';
-  const slotTime = tablet ? '17:00:00' : '18:00:00';
+  const slotTime = '17:00:00';
   const dialog = await createAt(page, name, slotTime);
   await dialog.getByRole('button', { name: 'Save' }).click();
   const ev = page.locator('.fc-timegrid-event:not(.fc-event-mirror)', { hasText: name });
@@ -192,13 +192,15 @@ test('moving first, then resting, does not pick up an event or open it', async (
 });
 
 test('moving first, then resting, over empty slots does not create', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Week');
   const slot = page.locator('td.fc-timegrid-slot-lane[data-time="09:00:00"]');
   await slot.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(150);
   const box = (await slot.boundingBox())!;
-  const x = box.x + box.width * 0.6;
+  const today = (await page.locator('.fc-timegrid-col.fc-day-today').boundingBox())!;
+  const x = today.x + today.width * 0.75;
   const y = box.y + box.height / 2;
   await touchPath(page, [{ x, y }, { x: x - 8, y }, { x: x - 16, y: y + 1 }, { x: x - 18, y: y + 1, wait: 800 }, { x: x - 18, y: y + 80, wait: 30 }]);
   await page.waitForTimeout(400);
@@ -207,6 +209,7 @@ test('moving first, then resting, over empty slots does not create', async ({ pa
 });
 
 test('a change Home Assistant rejects is rolled back with a message', async ({ page }) => {
+  await ownDay(page);
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Doomed');
@@ -215,7 +218,9 @@ test('a change Home Assistant rejects is rolled back with a message', async ({ p
   const ev = page.locator('.fc-timegrid-event', { hasText: name });
   await expect(ev).not.toHaveClass(/ev-pending/);
   // Someone deletes it in HA behind Cadence's back (no live update yet arrives before we act).
-  const states = await (await fetch('http://127.0.0.1:8199/api/events?start=' + encodeURIComponent(new Date(Date.now() - 864e5 * 3).toISOString()) + '&end=' + encodeURIComponent(new Date(Date.now() + 864e5 * 3).toISOString()))).json();
+  const now = await page.evaluate(() => Date.now());
+  const range = `start=${encodeURIComponent(new Date(now - 864e5 * 3).toISOString())}&end=${encodeURIComponent(new Date(now + 864e5 * 3).toISOString())}`;
+  const states = await (await fetch(`http://127.0.0.1:8199/api/events?${range}`)).json();
   const target = states.events.find((e: any) => e.summary === name);
   await page.route('**/api/stream', (r) => r.abort());
   await haCommand({ type: 'calendar/event/delete', entity_id: target.entity_id, uid: target.uid });
@@ -225,5 +230,4 @@ test('a change Home Assistant rejects is rolled back with a message', async ({ p
   await edit.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('alert').filter({ hasText: /No existing event/ })).toBeVisible();
   await expect(page.locator('.fc-timegrid-event', { hasText: `${name} renamed` })).toHaveCount(0);
-  void gotoDay;
 });

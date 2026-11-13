@@ -514,6 +514,9 @@ export const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarV
         }}
         events={fetchEvents}
         loading={(isLoading) => {
+          // Set directly, not through state: a re-render here would re-render
+          // FullCalendar on every fetch. (Tests also wait on it.)
+          wrapRef.current?.setAttribute('aria-busy', String(isLoading));
           if (isLoading) return;
           const w = waiters.current;
           waiters.current = [];

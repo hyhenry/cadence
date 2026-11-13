@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- On narrow screens the calendars button moved to the right end of the top bar and has its own icon, so inside the Home Assistant app it no longer sits right under HA's menu button looking like a second one. The calendar list now slides in from the right.
+- Text now matches Home Assistant: the same font, a slightly smaller base size that follows the font size you set in HA, and HA's lighter title style. The top bar and event labels are less crowded.
+
 ## 0.1.4
 
 - Swiping between days and weeks follows your finger and is smoother. The next and previous periods are loaded ahead, so their events are there when you arrive. In the 3-day view a swipe moves by as many days as you drag.

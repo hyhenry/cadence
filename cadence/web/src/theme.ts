@@ -13,7 +13,37 @@ const VARS: [ha: string, ours: string][] = [
   ['--secondary-text-color', '--c-muted'],
   ['--divider-color', '--c-line'],
   ['--error-color', '--c-danger'],
+  // Typography: HA's body font and its base size (14px, times the font scale
+  // the user may have set in HA).
+  ['--ha-font-family-body', '--font-body'],
+  ['--ha-font-size-m', '--font-size-base'],
 ];
+
+/**
+ * HA bundles Roboto and registers it in its own document; font faces don't
+ * carry into this iframe, so register the same files here. They're on the same
+ * origin and normally already in the browser cache. If they can't be found the
+ * font stack just falls back to the system font.
+ */
+function borrowHaFonts(doc: Document) {
+  if (document.getElementById('ha-fonts')) return;
+  const loaded = doc.defaultView?.performance
+    .getEntriesByType('resource')
+    .map((e) => e.name)
+    .find((n) => /\/Roboto-[A-Za-z]+\.woff2(\?|$)/.test(n));
+  const dir = loaded ? loaded.slice(0, loaded.lastIndexOf('/') + 1) : new URL('/static/fonts/roboto/', doc.baseURI).href;
+  const faces: [weight: number, file: string][] = [
+    [400, 'Regular'],
+    [500, 'Medium'],
+    [700, 'Bold'],
+  ];
+  const style = document.createElement('style');
+  style.id = 'ha-fonts';
+  style.textContent = faces
+    .map(([w, f]) => `@font-face{font-family:Roboto;font-style:normal;font-weight:${w};font-display:swap;src:local("Roboto ${f}"),local("Roboto-${f}"),url("${dir}Roboto-${f}.woff2") format("woff2")}`)
+    .join('\n');
+  document.head.append(style);
+}
 
 function haDocument(): Document | null {
   try {
@@ -62,6 +92,7 @@ function followDevice() {
 export function applyTheme() {
   const doc = haDocument();
   if (!doc || !syncFromHa(doc)) return followDevice();
+  borrowHaFonts(doc);
   const sync = () => syncFromHa(doc);
   // HA switches themes (and light/dark in "auto" mode) by rewriting inline
   // styles on its root elements: react immediately.

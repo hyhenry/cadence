@@ -1,6 +1,6 @@
 # Shown in Home Assistant (app store, sidebar and the mobile header) as "Calendar".
 name: Calendar
-version: "0.1.4"
+version: "0.1.5"
 slug: cadence
 description: Cadence, a touch-friendly calendar with reminders and Google/Outlook link calendars
 arch:

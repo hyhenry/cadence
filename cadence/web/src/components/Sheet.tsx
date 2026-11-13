@@ -73,6 +73,9 @@ export function Sheet({ title, onClose, children, footer, action, size = 'normal
 const PATHS: Record<string, string> = {
   close: 'M6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6Z',
   menu: 'M3 18v-2h18v2Zm0-5v-2h18v2Zm0-5V6h18v2Z',
+  // Stacked layers: "which calendars are shown". Deliberately not a hamburger,
+  // so it can't be mistaken for Home Assistant's own sidebar button above it.
+  layers: 'M12 16 3 9l9-7 9 7Zm0 5.05-9-7 1.65-1.25L12 18.5l7.35-5.7L21 14.05Z',
   left: 'M14 18 8 12l6-6 1.4 1.4-4.6 4.6 4.6 4.6Z',
   right: 'm9.4 18-1.4-1.4 4.6-4.6L8 7.4 9.4 6l6 6Z',
   plus: 'M11 19v-6H5v-2h6V5h2v6h6v2h-6v6Z',

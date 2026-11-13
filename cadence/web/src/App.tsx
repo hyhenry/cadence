@@ -374,11 +374,6 @@ function Shell() {
       />
       <div className="main">
         <header className="topbar">
-          {!wide && (
-            <button type="button" className="icon-btn" aria-label="Calendars and settings" onClick={() => setDrawerOpen(true)}>
-              <Icon name="menu" />
-            </button>
-          )}
           <h1 className="title" aria-live="polite">
             {title}
           </h1>
@@ -412,6 +407,13 @@ function Shell() {
                   </button>
                 ))}
               </div>
+            )}
+            {/* On the right, away from Home Assistant's own menu button, which sits
+                top-left above the app when it runs inside HA. */}
+            {!wide && (
+              <button type="button" className="icon-btn" aria-label="Calendars and settings" onClick={() => setDrawerOpen(true)}>
+                <Icon name="layers" />
+              </button>
             )}
           </div>
         </header>

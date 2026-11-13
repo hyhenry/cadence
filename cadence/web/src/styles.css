@@ -20,9 +20,16 @@
   --tap: 44px;
   --topbar: 56px;
   color-scheme: light;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  font-size: 16px;
+  /* Type follows Home Assistant's: its font and its 14px base size, which every
+     rem below scales from (theme.ts copies HA's own values, including a font
+     scale the user set there). Weights stay on HA's 400 / 500 / 700. */
+  --font-body: Roboto, Noto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-size-base: 14px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
   line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -173,7 +180,7 @@ kbd {
   border: 0;
   background: transparent;
   color: var(--c-accent);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   min-height: 36px;
   padding: 0 8px;
@@ -229,14 +236,15 @@ kbd {
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-line);
 }
+/* Like HA's own page titles: regular weight; 16px here, 20px (HA's) when wide. */
 .title {
   flex: 1;
-  font-size: 1.15rem;
+  font-size: calc(16 / 14 * 1rem);
   margin: 0 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 600;
+  font-weight: 400;
 }
 .nav {
   display: flex;
@@ -301,13 +309,15 @@ kbd {
 }
 
 /* ---------- drawer ---------- */
+/* Slides in from the right, where its button is (the docked tablet layout
+   below keeps it on the left). */
 .drawer {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset: 0 0 0 auto;
   width: min(320px, 86vw);
   background: var(--c-surface);
   z-index: 40;
-  transform: translateX(-105%);
+  transform: translateX(105%);
   transition: transform 0.22s ease;
   display: flex;
   flex-direction: column;
@@ -521,7 +531,7 @@ kbd {
 }
 .field > span:first-child {
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--c-muted);
 }
 input[type='text'],
@@ -545,7 +555,7 @@ textarea {
 }
 .title-input {
   font-size: 1.3rem;
-  font-weight: 600;
+  font-weight: 500;
   border: 0 !important;
   border-bottom: 2px solid var(--c-line) !important;
   border-radius: 0 !important;
@@ -716,7 +726,7 @@ textarea {
   gap: 8px;
   align-items: center;
   color: var(--c-ok);
-  font-weight: 600;
+  font-weight: 500;
   margin: 8px 0;
 }
 .settings-section {
@@ -860,7 +870,7 @@ textarea {
 .fc .fc-list-day-side-text {
   color: var(--c-text);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
 }
 .fc .fc-col-header-cell {
   padding: 6px 0;
@@ -937,14 +947,11 @@ textarea {
 }
 /* ---------- breakpoints ---------- */
 @media (max-width: 599px) {
-  .title {
-    font-size: 1.02rem;
-  }
   .btn.today {
     padding: 0 12px;
   }
   .fc .fc-col-header-cell-cushion {
-    font-size: 0.8rem;
+    font-size: calc(12 / 14 * 1rem);
   }
   .fc .fc-toolbar {
     display: none;
@@ -955,7 +962,7 @@ textarea {
     padding: 0 16px;
   }
   .title {
-    font-size: 1.3rem;
+    font-size: calc(20 / 14 * 1rem);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -973,7 +980,7 @@ textarea {
   line-height: 1.2;
 }
 .ev-title {
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
 }

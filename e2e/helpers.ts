@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 export const MOCK_URL = 'http://127.0.0.1:8224';
 
@@ -7,7 +7,34 @@ export const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1000) < 60
 export async function open(page: Page) {
   await page.goto('./');
   await expect(page.getByTestId('calendar')).toBeVisible();
-  await expect(page.locator('.fc-event').first()).toBeVisible();
+  // The first load of events has finished (whether or not there are any).
+  await expect(page.getByTestId('calendar')).toHaveAttribute('aria-busy', 'false');
+}
+
+let ownDays = 0;
+
+/**
+ * Give a test a calendar day of its own, so pressing "today at 10:00" means an
+ * empty slot. The browser clock is set to noon (UTC) on a weekend day far in
+ * the future, a different one for every call in the run (worker index plus a
+ * counter; Playwright starts a new worker after a failure). The clock keeps
+ * running in real time from there, so long presses still work. Call before
+ * open().
+ *
+ * Without this, touch tests pressed at fixed times on the real today and
+ * failed depending on the weekday (the mock seeds weekly series: Standup on
+ * weekdays at 9, Swim lessons Tue/Thu at 17:30, a remote "Weekly sync" at 11
+ * on the weekday after the mock started) and on events other tests and the
+ * other device project had left there, since they share one mock HA.
+ */
+export async function ownDay(page: Page) {
+  const tz = process.env.MOCK_TZ ?? 'America/Toronto'; // the mock's default
+  const weekday = (d: Date) => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(d);
+  // "Weekly sync" repeats on the weekday after the mock started: avoid it.
+  const syncOnSunday = weekday(new Date(Date.now() + 864e5)) === 'Sun';
+  const index = test.info().workerIndex * 500 + ownDays++;
+  const day = new Date(Date.UTC(2031, 0, 5 + 7 * index - (syncOnSunday ? 1 : 0), 12)); // 2031-01-05 is a Sunday
+  await page.clock.install({ time: day });
 }
 
 export async function setView(page: Page, label: 'Month' | 'Week' | '3 days' | 'Day' | 'Agenda') {
