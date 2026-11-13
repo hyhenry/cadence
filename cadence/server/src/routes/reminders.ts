@@ -3,7 +3,9 @@ import type { Settings } from '../store/db.ts';
 import { validRules } from './calendars.ts';
 import { ApiError, sendError, str, type Ctx } from './context.ts';
 
-const VIEWS = new Set(['dayGridMonth', 'timeGridWeek', 'timeGridDay', 'listWeek', 'timeGrid3Day']);
+const VIEWS = new Set(['dayGridMonth', 'timeGridWeek', 'timeGrid3Day', 'timeGridDay', 'listAgenda']);
+/** Older name for the agenda view, accepted so a save can never be rejected over it. */
+const VIEW_ALIASES: Record<string, string> = { listWeek: 'listAgenda' };
 
 export function reminderRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/settings', async () => ({ settings: ctx.store.getSettings() }));
@@ -24,8 +26,9 @@ export function reminderRoutes(app: FastifyInstance, ctx: Ctx) {
       if (b.default_calendar !== undefined) patch.default_calendar = b.default_calendar ? String(b.default_calendar) : null;
       if (b.week_start !== undefined) patch.week_start = Number(b.week_start) === 1 ? 1 : Number(b.week_start) === 6 ? 6 : 0;
       if (b.default_view !== undefined) {
-        if (!VIEWS.has(b.default_view)) throw new ApiError(400, 'invalid_request', 'unknown view');
-        patch.default_view = b.default_view;
+        const view = VIEW_ALIASES[b.default_view] ?? b.default_view;
+        if (!VIEWS.has(view)) throw new ApiError(400, 'invalid_request', 'unknown view');
+        patch.default_view = view;
       }
       if (b.default_duration_minutes !== undefined) {
         const n = Math.round(Number(b.default_duration_minutes));

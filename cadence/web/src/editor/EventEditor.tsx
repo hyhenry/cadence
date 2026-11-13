@@ -64,6 +64,8 @@ export function EventEditor({ tz, calendars, event, seed, onClose, onSave, onDel
   const originalRule = event?.rrule ?? undefined;
   const complexRule = isComplexRrule(originalRule);
   const [repeatTouched, setRepeatTouched] = useState(false);
+  /** "Custom…" was picked: keep showing the custom controls even if the rule happens to equal a preset. */
+  const [customPicked, setCustomPicked] = useState(false);
   const [reminderMode, setReminderMode] = useState<'default' | 'custom'>('default');
   const [reminders, setReminders] = useState<ReminderRule[]>([]);
   const [remindersTouched, setRemindersTouched] = useState(false);
@@ -153,7 +155,7 @@ export function EventEditor({ tz, calendars, event, seed, onClose, onSave, onDel
   };
 
   const presetList = presets(startDt.isValid ? startDt : init.s);
-  const presetId = repeat.freq ? matchPreset(repeat, startDt) : 'none';
+  const presetId = !repeat.freq ? 'none' : customPicked ? 'custom' : matchPreset(repeat, startDt);
 
   const reminderBlock = (
     <div className="field">
@@ -286,8 +288,9 @@ export function EventEditor({ tz, calendars, event, seed, onClose, onSave, onDel
             onChange={(e) => {
               setRepeatTouched(true);
               const p = presetList.find((x) => x.id === e.target.value);
+              setCustomPicked(!p && e.target.value === 'custom');
               if (p) setRepeat({ ...p.repeat, end: repeat.end });
-              else if (e.target.value === 'custom') setRepeat({ ...repeat, freq: repeat.freq ?? 'WEEKLY', byDay: repeat.byDay.length ? repeat.byDay : [] });
+              else if (e.target.value === 'custom') setRepeat({ ...repeat, freq: repeat.freq ?? 'WEEKLY' });
             }}
           >
             {complexRule && !repeatTouched && <option value="complex">{describeRepeat(repeat, startDt)} (set elsewhere)</option>}
@@ -351,10 +354,10 @@ export function EventEditor({ tz, calendars, event, seed, onClose, onSave, onDel
                 <option value="until">On date</option>
                 <option value="count">After</option>
               </select>
-              {repeat.end.kind === 'until' && <input type="date" aria-label="Repeat until" value={repeat.end.date} min={startDate} onChange={(e) => e.target.value && setRepeat({ ...repeat, end: { kind: 'until', date: e.target.value } })} />}
+              {repeat.end.kind === 'until' && <input type="date" aria-label="Repeat until" value={repeat.end.date} min={startDate} onChange={(e) => e.target.value && (setRepeatTouched(true), setRepeat({ ...repeat, end: { kind: 'until', date: e.target.value } }))} />}
               {repeat.end.kind === 'count' && (
                 <>
-                  <input type="number" min={1} max={999} aria-label="Number of times" value={repeat.end.count} onChange={(e) => setRepeat({ ...repeat, end: { kind: 'count', count: Math.max(1, Number(e.target.value) || 1) } })} />
+                  <input type="number" min={1} max={999} aria-label="Number of times" value={repeat.end.count} onChange={(e) => (setRepeatTouched(true), setRepeat({ ...repeat, end: { kind: 'count', count: Math.max(1, Number(e.target.value) || 1) } }))} />
                   <span>times</span>
                 </>
               )}

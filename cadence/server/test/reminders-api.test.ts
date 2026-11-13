@@ -34,6 +34,18 @@ test('settings are validated', async () => {
   assert.equal((await h.inject({ method: 'PUT', url: '/api/settings', payload: { notify_targets: ['light.kitchen'] } })).statusCode, 400);
   assert.equal((await h.inject({ method: 'PUT', url: '/api/settings', payload: { refresh_minutes: 0 } })).statusCode, 400);
   assert.equal((await h.inject({ method: 'PUT', url: '/api/settings', payload: { refresh_minutes: 30, week_start: 1 } })).json().settings.week_start, 1);
+  assert.equal((await h.inject({ method: 'PUT', url: '/api/settings', payload: { default_view: 'nope' } })).statusCode, 400);
+});
+
+test('every view the web app offers can be the default view', async () => {
+  for (const v of ['dayGridMonth', 'timeGridWeek', 'timeGrid3Day', 'timeGridDay', 'listAgenda']) {
+    const res = await h.inject({ method: 'PUT', url: '/api/settings', payload: { default_view: v } });
+    assert.equal(res.statusCode, 200, v);
+    assert.equal(res.json().settings.default_view, v);
+  }
+  // The old name of the agenda view is stored as the new one.
+  assert.equal((await h.inject({ method: 'PUT', url: '/api/settings', payload: { default_view: 'listWeek' } })).json().settings.default_view, 'listAgenda');
+  await h.inject({ method: 'PUT', url: '/api/settings', payload: { default_view: 'timeGridWeek' } });
 });
 
 test('per-calendar default reminders are stored and validated', async () => {

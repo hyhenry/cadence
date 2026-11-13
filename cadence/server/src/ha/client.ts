@@ -63,6 +63,8 @@ export class HaClient {
       token: target.token,
       log: (level, msg) => log?.[level](msg),
     });
+    // HA may have been upgraded or had its time zone changed while we were away.
+    this.socket.on('connected', () => (this.configCache = null));
   }
 
   start() {
@@ -96,8 +98,8 @@ export class HaClient {
     return parsed as T;
   }
 
-  async config(force = false): Promise<HaConfig> {
-    if (!this.configCache || force) this.configCache = await this.rest<HaConfig>('GET', '/config');
+  async config(): Promise<HaConfig> {
+    this.configCache ??= await this.rest<HaConfig>('GET', '/config');
     return this.configCache;
   }
 

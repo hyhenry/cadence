@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7
+
+- Choosing Agenda as the default view in Settings works again. Before, saving any setting failed once Agenda was picked.
+- Typing in the event editor no longer jumps back to the title when you switch back to the app or the calendar list reloads.
+- "Custom…" under Repeat now opens the custom options (every N days or weeks, which weekdays) instead of turning into "Weekly on …".
+- Changing when a repeat ends (on a date, or after a number of times) is now always saved.
+- If Cadence opened while Home Assistant was restarting, times no longer stay in UTC. Cadence picks up Home Assistant's time zone once it reconnects.
+- Settings → About shows the right version.
+
 ## 0.1.6
 
 - On wide screens the calendar list can be hidden with the new button left of the month name, giving the calendar the full width. Each device remembers your choice.

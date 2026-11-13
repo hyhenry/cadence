@@ -85,7 +85,7 @@ export function eventKey(e: Pick<CadenceEvent, 'entity_id' | 'uid' | 'recurrence
   return `${e.entity_id}|${e.uid ?? e.summary}|${e.recurrence_id ?? ''}|${e.start}`;
 }
 
-/** Add one day to an all-day end that FullCalendar would otherwise treat as exclusive already. */
+/** A Cadence event as a FullCalendar event (HA's all-day end dates are already exclusive, as FullCalendar expects). */
 function toFc(e: CadenceEvent, cal: Calendar | undefined): EventInput {
   const editable = !!cal?.can_update && !!e.uid;
   return {

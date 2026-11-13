@@ -8,13 +8,18 @@ interface SheetProps {
   /** Optional element rendered at the right of the header (e.g. a Save button). */
   action?: ReactNode;
   size?: 'normal' | 'small';
-  labelledBy?: string;
 }
 
 /** Bottom sheet on phones, centred dialog on larger screens. */
 export function Sheet({ title, onClose, children, footer, action, size = 'normal' }: SheetProps) {
   const ref = useRef<HTMLDivElement>(null);
   const startY = useRef<number | null>(null);
+  // Parents pass a new onClose on every render. Read it through a ref so the
+  // effect below runs once per sheet: re-running it would move focus back to
+  // the first field (and briefly out of the sheet) whenever the app re-renders,
+  // e.g. when calendars reload while someone is typing.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const first = ref.current?.querySelector<HTMLElement>('[data-autofocus], input:not([type=hidden]), select, textarea, button:not(.sheet-close)');
@@ -22,7 +27,7 @@ export function Sheet({ title, onClose, children, footer, action, size = 'normal
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
       if (e.key === 'Tab' && ref.current) {
         const items = [...ref.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.hasAttribute('disabled'));
@@ -43,7 +48,7 @@ export function Sheet({ title, onClose, children, footer, action, size = 'normal
       document.removeEventListener('keydown', onKey, true);
       prev?.focus?.({ preventScroll: true });
     };
-  }, [onClose]);
+  }, []);
   return (
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} className={`sheet sheet-${size}`} role="dialog" aria-modal="true" aria-label={title}>
@@ -72,7 +77,6 @@ export function Sheet({ title, onClose, children, footer, action, size = 'normal
 
 const PATHS: Record<string, string> = {
   close: 'M6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6Z',
-  menu: 'M3 18v-2h18v2Zm0-5v-2h18v2Zm0-5V6h18v2Z',
   // Stacked layers: "which calendars are shown". Deliberately not a hamburger,
   // so it can't be mistaken for Home Assistant's own sidebar button above it.
   layers: 'M12 16 3 9l9-7 9 7Zm0 5.05-9-7 1.65-1.25L12 18.5l7.35-5.7L21 14.05Z',

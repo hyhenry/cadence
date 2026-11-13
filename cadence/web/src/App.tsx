@@ -1,6 +1,7 @@
 import type { DatesSetArg } from '@fullcalendar/core';
+import { DateTime } from 'luxon';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, subscribeLive, type CadenceEvent, type Calendar, type Info, type Settings } from './api/client.ts';
+import { api, subscribeLive, type CadenceEvent, type Calendar, type EventInput, type Info, type Settings } from './api/client.ts';
 import { AddCalendarSheet, CalendarSheet } from './calendars/CalendarSheets.tsx';
 import { Drawer } from './calendars/Drawer.tsx';
 import { Icon } from './components/Sheet.tsx';
@@ -10,8 +11,6 @@ import { SettingsSheet } from './settings/SettingsSheet.tsx';
 import { dateOut, inZone, isoOut, nextRoundHour } from './util/time.ts';
 import { useMedia } from './util/useMedia.ts';
 import { CalendarView, eventKey, VIEW_LABELS, type CalendarHandle, type MoveInfo, type ViewName } from './views/CalendarView.tsx';
-import { DateTime } from 'luxon';
-import type { EventInput } from './api/client.ts';
 
 export function App() {
   return (
@@ -36,14 +35,14 @@ const VIEW_KEY = 'cadence.lastView';
 function lastView(): ViewName | null {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v && v in VIEW_LABELS ? (v as ViewName) : null;
+    return v && isView(v) ? v : null;
   } catch {
     return null;
   }
 }
 function rememberView(v: string) {
   try {
-    if (v in VIEW_LABELS) localStorage.setItem(VIEW_KEY, v);
+    if (isView(v)) localStorage.setItem(VIEW_KEY, v);
   } catch {
     /* storage unavailable (private mode): just don't remember */
   }
@@ -66,7 +65,17 @@ function rememberSidebar(shown: boolean) {
   }
 }
 
-const isRecurringInstance =(e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
+const isView = (v: string): v is ViewName => Object.hasOwn(VIEW_LABELS, v);
+
+/** The view to open with: this device's last one, else the default (3 days instead of a week on phones). */
+function initialView(s: Settings, phone: boolean): ViewName {
+  const last = lastView();
+  if (last) return last;
+  if (phone && s.default_view === 'timeGridWeek') return 'timeGrid3Day';
+  return isView(s.default_view) ? s.default_view : 'timeGridWeek';
+}
+
+const isRecurringInstance = (e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
 
 function Shell() {
   const toast = useToast();
@@ -94,6 +103,17 @@ function Shell() {
     }
   }, [toast]);
 
+  // Re-read after reconnecting: while HA is unreachable the server can only
+  // report UTC as the time zone, and HA may have been updated meanwhile.
+  const loadInfo = useCallback(async () => {
+    try {
+      const i = await api.info();
+      setInfo((cur) => (cur && JSON.stringify(cur) === JSON.stringify(i) ? cur : i));
+    } catch {
+      /* keep what we have; the banners already say what is unreachable */
+    }
+  }, []);
+
   const boot = useCallback(async () => {
     try {
       const [i, s, c] = await Promise.all([api.info(), api.settings(), api.calendars()]);
@@ -102,7 +122,7 @@ function Shell() {
       setCalendars(c);
       setHaConnected(i.connected);
       setFatal(null);
-      setView((v) => v ?? lastView() ?? (phone && s.default_view === 'timeGridWeek' ? 'timeGrid3Day' : (s.default_view as ViewName)));
+      setView((v) => v ?? initialView(s, phone));
     } catch (e) {
       setFatal((e as Error).message);
     }
@@ -133,7 +153,10 @@ function Shell() {
         else if (e.type === 'calendars') void loadCalendars();
         else if (e.type === 'connection') {
           setHaConnected(e.connected);
-          if (e.connected) refetch();
+          if (e.connected) {
+            refetch();
+            void loadInfo();
+          }
         }
       },
       (ok) => {
@@ -144,6 +167,7 @@ function Shell() {
             if (!was) {
               refetch();
               void loadCalendars();
+              void loadInfo();
             }
             return true;
           });
@@ -163,7 +187,7 @@ function Shell() {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('focus', onVis);
     };
-  }, [loadCalendars]);
+  }, [loadCalendars, loadInfo]);
 
   // Refetch when the set of visible calendars or their colours change.
   const calKey = useMemo(() => (calendars ?? []).map((c) => `${c.entity_id}:${c.visible}:${c.color}`).join(','), [calendars]);
@@ -524,7 +548,7 @@ function Shell() {
       {overlay?.kind === 'calendar' && <CalendarSheet calendar={overlay.calendar} onClose={() => setOverlay(null)} onChanged={() => void loadCalendars()} />}
       {overlay?.kind === 'add' && <AddCalendarSheet onClose={() => setOverlay(null)} onAdded={() => void loadCalendars()} remoteAvailable={info.remote_calendar} usedColors={calendars.map((c) => c.color)} />}
       {overlay?.kind === 'settings' && <SettingsSheet info={info} settings={settings} calendars={calendars} onClose={() => setOverlay(null)} onSaved={(s) => {
-            if (s.default_view !== settings.default_view && s.default_view in VIEW_LABELS) changeView(s.default_view as ViewName);
+            if (s.default_view !== settings.default_view && isView(s.default_view)) changeView(s.default_view);
             setSettings(s);
           }} />}
     </div>

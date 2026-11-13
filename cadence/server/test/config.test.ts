@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { VERSION } from '../src/app.ts';
 import { describeTarget, resolveHaTarget } from '../src/config.ts';
 
 const noEnv = { CADENCE_ENV_FILE: '/nonexistent/.env' };
@@ -75,4 +77,9 @@ test('only the Ingress proxy may connect in production', async () => {
   } finally {
     await app.close();
   }
+});
+
+test('the version shown in the app matches the version in config.yaml', () => {
+  const yaml = readFileSync(fileURLToPath(new URL('../../config.yaml', import.meta.url)), 'utf8');
+  assert.equal(VERSION, /^version:\s*"?([^"\s]+)"?/m.exec(yaml)?.[1]);
 });

@@ -62,6 +62,39 @@ test('all-day event from the editor', async ({ page }) => {
   await expect(page.locator('.fc-daygrid-event', { hasText: name })).toBeVisible();
 });
 
+test('"Custom…" repeat shows the custom controls', async ({ page }) => {
+  await ownDay(page);
+  await open(page);
+  await setView(page, 'Day');
+  const dialog = await createAt(page, uniq('Custom repeat'), '13:00:00');
+  const repeat = dialog.getByLabel('Repeat', { exact: true });
+  await repeat.selectOption('custom');
+  // A plain weekly rule equals the "Weekly on …" preset; picking Custom must not collapse into it.
+  await expect(repeat).toHaveValue('custom');
+  await expect(dialog.getByLabel('Repeat interval')).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Days of the week' })).toBeVisible();
+  await repeat.selectOption('daily');
+  await expect(dialog.getByLabel('Repeat interval')).toHaveCount(0);
+});
+
+test('typing in the editor keeps focus when the calendars reload', async ({ page }) => {
+  await ownDay(page);
+  await open(page);
+  await setView(page, 'Day');
+  const dialog = await createAt(page, uniq('Focus'), '14:00:00');
+  const location = dialog.getByLabel('Location');
+  await location.click();
+  await location.pressSequentially('Gym');
+  // Returning to the app reloads the calendar list, which re-renders the app under the open editor.
+  const reloaded = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith('/api/calendars'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await reloaded;
+  await page.waitForTimeout(100);
+  await expect(location).toBeFocused();
+  await location.pressSequentially(' hall');
+  await expect(location).toHaveValue('Gym hall');
+});
+
 test('recurring event: delete one occurrence, then all', async ({ page }) => {
   await ownDay(page);
   await open(page);

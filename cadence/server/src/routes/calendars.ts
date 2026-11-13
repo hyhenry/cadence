@@ -64,11 +64,11 @@ async function finishFlow(ctx: Ctx, res: FlowResult, color: string | undefined) 
   if (res.type === 'create_entry' && res.result?.entry_id) {
     const cal = await waitForEntity(ctx, res.result.entry_id);
     if (!cal) return { pending: true, title: res.title };
-    const meta = ctx.store.ensureMeta([cal.entity_id]);
+    ctx.store.ensureMeta([cal.entity_id]);
     if (color) ctx.store.updateMeta(cal.entity_id, { color });
     await ctx.live.resync();
     ctx.live.broadcast('calendars');
-    return { calendar: calendarView(cal, ctx.store.getMeta(cal.entity_id) ?? meta.get(cal.entity_id)) };
+    return { calendar: calendarView(cal, ctx.store.getMeta(cal.entity_id) ?? undefined) };
   }
   if (res.type === 'abort') {
     if (res.reason === 'already_configured') throw new ApiError(409, 'already_exists', 'A calendar with this name or link already exists in Home Assistant.');

@@ -14,6 +14,7 @@ export class LiveHub {
   private rewindow: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private syncing: Promise<void> | null = null;
+  private stopped = false;
   calendars: HaCalendar[] = [];
   private readonly ha: HaClient;
   private readonly store: Store;
@@ -28,6 +29,7 @@ export class LiveHub {
   }
 
   start() {
+    this.stopped = false;
     this.ha.socket.on('connected', () => {
       this.broadcast('connection', { connected: true });
       void this.resync(true);
@@ -45,6 +47,7 @@ export class LiveHub {
   }
 
   stop() {
+    this.stopped = true;
     if (this.heartbeat) clearInterval(this.heartbeat);
     if (this.rewindow) clearInterval(this.rewindow);
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
@@ -125,6 +128,7 @@ export class LiveHub {
 
   /** Link calendars: HA only polls them daily, so ask for an update on Cadence's own interval. */
   private scheduleRemoteRefresh() {
+    if (this.stopped) return;
     const minutes = Math.max(1, Number(this.store.getSettings().refresh_minutes) || 15);
     this.refreshTimer = setTimeout(async () => {
       await this.refreshRemotes().catch(() => undefined);

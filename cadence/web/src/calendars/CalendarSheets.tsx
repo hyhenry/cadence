@@ -131,7 +131,7 @@ export function CalendarSheet({ calendar, onClose, onChanged }: { calendar: Cale
   );
 }
 
-export function AddCalendarSheet({ onClose, onAdded, remoteAvailable, usedColors }: { onClose: () => void; onAdded: (c?: Calendar) => void; remoteAvailable: boolean | null; usedColors: string[] }) {
+export function AddCalendarSheet({ onClose, onAdded, remoteAvailable, usedColors }: { onClose: () => void; onAdded: () => void; remoteAvailable: boolean | null; usedColors: string[] }) {
   const toast = useToast();
   const [tab, setTab] = useState<'new' | 'link'>('new');
   const [name, setName] = useState('');
@@ -157,7 +157,7 @@ export function AddCalendarSheet({ onClose, onAdded, remoteAvailable, usedColors
     try {
       const r = await api.createLocalCalendar(name.trim(), color);
       toast(r.pending ? 'Calendar created; it will appear in a moment.' : `Created ${name.trim()}`);
-      onAdded(r.calendar);
+      onAdded();
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -187,7 +187,7 @@ export function AddCalendarSheet({ onClose, onAdded, remoteAvailable, usedColors
     try {
       const r = await api.addLink(url, name.trim(), color);
       toast(`Subscribed to ${name.trim()}`);
-      onAdded(r.calendar);
+      onAdded();
       onClose();
     } catch (e) {
       showError(e);
