@@ -947,7 +947,14 @@ textarea {
   opacity: 0.85;
 }
 .fc-direction-ltr .fc-timegrid-col-events {
-  margin: 0 3px 0 2px;
+  margin: 0 2px;
+}
+/* Events that share a time sit side by side; FullCalendar puts them flush,
+   which makes same-coloured neighbours read as one block. Leave a gap on the
+   right of every event (with the column margin above, the last one still ends
+   3px from the column edge as before). */
+.fc .fc-timegrid-event-harness > .fc-timegrid-event {
+  right: 1px;
 }
 /* Bigger resize handles for fingers. */
 .fc .fc-event-selected .fc-event-resizer,

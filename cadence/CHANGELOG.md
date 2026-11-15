@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Events at the same time now have a thin gap between them, so neighbours in the same colour no longer look like one block.
+
 ## 0.1.8
 
 - Cadence opens faster. It no longer downloads every entity in Home Assistant just to list your calendars, and it loads the events once instead of three times.
