@@ -587,12 +587,35 @@ textarea {
   border-bottom-color: var(--c-accent) !important;
   outline: none;
 }
+/* iOS draws date and time fields natively: centred text, a minimum width of
+   their own and extra height around the value. Drop that so they size and
+   line up like the other fields. */
+input[type='date'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--tap);
+  line-height: 1.25;
+  text-align: left;
+}
+input::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: left;
+}
 .datetime-row {
   display: grid;
-  grid-template-columns: 3.5em 1fr auto;
-  gap: 8px;
+  /* minmax(0, …): let the date shrink instead of running under the time. */
+  grid-template-columns: 3.5em minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  margin: 6px 0;
+  margin: 8px 0;
+}
+.datetime-row input {
+  min-width: 0;
+}
+/* All day: no time field, so the date takes its place too. */
+.datetime-row input[type='date']:last-child {
+  grid-column: 2 / -1;
 }
 .datetime-row input[type='time'] {
   width: 8.5em;

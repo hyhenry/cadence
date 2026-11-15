@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- In the event editor on iPhone and iPad, the start and end date and time boxes are now the same height, line up, and no longer run into each other. With All day on, the date fills the row.
+
 ## 0.1.9
 
 - Events at the same time now have a thin gap between them, so neighbours in the same colour no longer look like one block.
