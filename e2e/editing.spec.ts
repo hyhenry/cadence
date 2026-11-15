@@ -243,6 +243,10 @@ test('moving first, then resting, over empty slots does not create', async ({ pa
 
 test('a change Home Assistant rejects is rolled back with a message', async ({ page }) => {
   await ownDay(page);
+  // No live updates in this test: the event is deleted in HA behind Cadence's
+  // back, and the push about it would remove it from the page before the tap.
+  // Blocking the stream later is too late, since that only stops new connections.
+  await page.route('**/api/stream', (r) => r.abort());
   await open(page);
   await setView(page, 'Day');
   const name = uniq('Doomed');
@@ -250,12 +254,11 @@ test('a change Home Assistant rejects is rolled back with a message', async ({ p
   await dialog.getByRole('button', { name: 'Save' }).click();
   const ev = page.locator('.fc-timegrid-event', { hasText: name });
   await expect(ev).not.toHaveClass(/ev-pending/);
-  // Someone deletes it in HA behind Cadence's back (no live update yet arrives before we act).
+  // Someone deletes it in HA behind Cadence's back.
   const now = await page.evaluate(() => Date.now());
   const range = `start=${encodeURIComponent(new Date(now - 864e5 * 3).toISOString())}&end=${encodeURIComponent(new Date(now + 864e5 * 3).toISOString())}`;
   const states = await (await fetch(`http://127.0.0.1:8199/api/events?${range}`)).json();
   const target = states.events.find((e: any) => e.summary === name);
-  await page.route('**/api/stream', (r) => r.abort());
   await haCommand({ type: 'calendar/event/delete', entity_id: target.entity_id, uid: target.uid });
   await ev.tap();
   const edit = page.getByRole('dialog', { name: 'Edit event' });
