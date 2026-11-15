@@ -1,7 +1,9 @@
 # Cadence: Home Assistant app image. The Supervisor builds this on the device
 # with this folder as the build context. No BUILD_FROM: since Supervisor
 # 2026.04 the base image must be named here.
-ARG NODE_IMAGE=node:24.11.1-alpine3.22
+# Node's own time zone rules are used for all-day reminders. Keep it recent:
+# 24.20.0 is the first with Alberta's 2026 change (tzdata 2026c).
+ARG NODE_IMAGE=node:24.22.3-alpine3.23
 
 # ---- build: compile the server (TypeScript) and the web app (Vite) ----
 FROM ${NODE_IMAGE} AS build

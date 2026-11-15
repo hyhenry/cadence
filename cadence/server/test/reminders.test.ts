@@ -88,6 +88,21 @@ test('notification text', () => {
   assert.equal(formatReminder(ad, TZ, 'Family').message, 'Today (all day) · Family');
 });
 
+test('notification times use the offset Home Assistant sent, not Node’s zone rules', () => {
+  // Alberta stays on −06:00 from November 2026. HA knows that; older Node tz data says MST (−07:00)
+  // and turned this 9:30 event into "8:30". The time zone passed in must not matter.
+  const swim = ev({ summary: 'Swimming', start: '2026-11-15T09:30:00-06:00', end: '2026-11-15T10:30:00-06:00' });
+  const rules = new Map([['calendar.family', [{ offset_minutes: 60 }]]]);
+  const now = Date.parse('2026-11-15T08:00:00-06:00');
+  for (const tz of ['UTC', 'America/Edmonton', 'Asia/Tokyo']) {
+    const [d] = planReminders(input({ now, timeZone: tz, events: [swim], calendarRules: rules }));
+    assert.equal(formatReminder(d, tz, 'Family').message, 'In 1 hour · 9:30 AM–10:30 AM · Family', tz);
+  }
+  // A reminder the day before names the event's day, in the event's own offset.
+  const [early] = planReminders(input({ now: Date.parse('2026-11-14T09:00:00-06:00'), timeZone: 'UTC', events: [swim], calendarRules: new Map([['calendar.family', [{ offset_minutes: 1440 }]]]) }));
+  assert.equal(formatReminder(early, 'UTC', 'Family').message, 'Tomorrow · Sun, Nov 15, 9:30 AM–10:30 AM · Family');
+});
+
 function fakeScheduler(store: Store, now: { t: number }, sent: string[], opts: { failing?: boolean; events?: CadenceEvent[] } = {}) {
   const timers: { fn: () => void; ms: number }[] = [];
   const s = new ReminderScheduler({

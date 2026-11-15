@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.11
+
+- Reminder notifications show the event's real time again. In Alberta, which no longer changes its clocks from November 2026, they showed times an hour early (8:30 for a 9:30 event).
+- The add-on now runs on Node.js 24.22.3, which knows about the 2026 time zone changes in Alberta, Manitoba and the Northwest Territories. All-day event reminders there go off at midnight again instead of an hour late.
+
 ## 0.1.10
 
 - In the event editor on iPhone and iPad, the start and end date and time boxes are now the same height, line up, and no longer run into each other. With All day on, the date fills the row.

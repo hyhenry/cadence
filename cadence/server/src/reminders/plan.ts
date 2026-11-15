@@ -99,17 +99,44 @@ export function describeOffset(min: number): string {
   return `In ${min} minute${min === 1 ? '' : 's'}`;
 }
 
-/** Notification title + message for a due reminder, formatted in the HA time zone. */
+/** The UTC offset written on an ISO datetime (`Z` or `±HH:MM`) in ms, or null when it has none. */
+export function isoOffsetMs(iso: string): number | null {
+  const m = /(Z|([+-])(\d{2}):?(\d{2}))$/.exec(iso);
+  if (!m) return null;
+  if (m[1] === 'Z') return 0;
+  return (m[2] === '-' ? -1 : 1) * (Number(m[3]) * 60 + Number(m[4])) * 60_000;
+}
+
+/**
+ * Formats an instant as wall-clock time. HA has already put its own UTC offset on every
+ * event time, so that offset is used as is. Node's bundled zone rules can lag HA's (Alberta
+ * stopping the clock change in 2026 made reminders an hour early). The HA time zone is
+ * only used when there is no offset.
+ */
+function wallClock(opts: Intl.DateTimeFormatOptions, timeZone: string, offsetMs: number | null) {
+  if (offsetMs === null) {
+    const f = new Intl.DateTimeFormat('en', { ...opts, timeZone });
+    return (ms: number) => f.format(new Date(ms));
+  }
+  const f = new Intl.DateTimeFormat('en', { ...opts, timeZone: 'UTC' });
+  return (ms: number) => f.format(new Date(ms + offsetMs));
+}
+
+/** Notification title + message for a due reminder, in the times HA gave for the event. */
 export function formatReminder(d: DueReminder, timeZone: string, calendarName: string): { title: string; message: string } {
   const e = d.event;
   const parts: string[] = [];
   if (e.all_day) {
     parts.push(d.offset_minutes === 0 ? 'Today (all day)' : `${describeOffset(d.offset_minutes)} (all day)`);
   } else {
-    const t = new Intl.DateTimeFormat('en', { timeZone, hour: 'numeric', minute: '2-digit' });
-    const day = new Intl.DateTimeFormat('en', { timeZone, weekday: 'short', month: 'short', day: 'numeric' });
-    const sameDay = day.format(new Date(d.fireAt)) === day.format(new Date(d.startMs));
-    const when = `${sameDay ? '' : day.format(new Date(d.startMs)) + ', '}${t.format(new Date(d.startMs))}–${t.format(new Date(Date.parse(e.end)))}`;
+    const startOff = isoOffsetMs(e.start);
+    const time = { hour: 'numeric', minute: '2-digit' } as const;
+    const startTime = wallClock(time, timeZone, startOff);
+    const endTime = wallClock(time, timeZone, isoOffsetMs(e.end));
+    // The reminder's own day uses the start's offset: only off if a clock change falls inside the lead time near midnight.
+    const day = wallClock({ weekday: 'short', month: 'short', day: 'numeric' }, timeZone, startOff);
+    const sameDay = day(d.fireAt) === day(d.startMs);
+    const when = `${sameDay ? '' : day(d.startMs) + ', '}${startTime(d.startMs)}–${endTime(Date.parse(e.end))}`;
     parts.push(`${describeOffset(d.offset_minutes)} · ${when}`);
   }
   if (e.location) parts.push(e.location);
