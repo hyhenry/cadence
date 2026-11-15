@@ -107,10 +107,15 @@ export class HaClient {
     return (await this.config()).time_zone || 'UTC';
   }
 
-  async listCalendars(): Promise<HaCalendar[]> {
+  /**
+   * Calendar entities with their integration. The integration comes from the
+   * entity registry over the websocket; with `wait: false` it is left out
+   * rather than waiting (up to 30 s) for the socket to connect.
+   */
+  async listCalendars({ wait = true } = {}): Promise<HaCalendar[]> {
     const [states, registry] = await Promise.all([
       this.rest<any[]>('GET', '/states'),
-      this.socket.send<any[]>({ type: 'config/entity_registry/list' }).catch(() => [] as any[]),
+      wait || this.socket.connected ? this.socket.send<any[]>({ type: 'config/entity_registry/list' }).catch(() => [] as any[]) : ([] as any[]),
     ]);
     const reg = new Map(registry.map((r) => [r.entity_id, r]));
     return states

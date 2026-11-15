@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- Cadence opens faster. It no longer downloads every entity in Home Assistant just to list your calendars, and it loads the events once instead of three times.
+- If the add-on starts before Home Assistant is ready, the calendar list no longer hangs for up to 30 seconds.
+
 ## 0.1.7
 
 - Choosing Agenda as the default view in Settings works again. Before, saving any setting failed once Agenda was picked.

@@ -86,7 +86,7 @@ async function finishFlow(ctx: Ctx, res: FlowResult, color: string | undefined) 
 export function calendarRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/calendars', async (_req, reply) => {
     try {
-      const cals = await ctx.ha.listCalendars();
+      const cals = await ctx.live.list();
       const meta = ctx.store.ensureMeta(cals.map((c) => c.entity_id));
       const out = cals.map((c) => calendarView(c, meta.get(c.entity_id)));
       out.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));

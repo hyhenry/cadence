@@ -84,6 +84,9 @@ function Shell() {
   const [calendars, setCalendars] = useState<Calendar[] | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [haConnected, setHaConnected] = useState(true);
+  // HA's connection state when the app loaded, and whether the live stream has reported it yet.
+  const haAtBoot = useRef<boolean | null>(null);
+  const streamReported = useRef(false);
   const [serverReachable, setServerReachable] = useState(true);
   const [title, setTitle] = useState('');
   const [view, setView] = useState<ViewName | null>(null);
@@ -121,6 +124,7 @@ function Shell() {
       setSettings(s);
       setCalendars(c);
       setHaConnected(i.connected);
+      haAtBoot.current = i.connected;
       setFatal(null);
       setView((v) => v ?? initialView(s, phone));
     } catch (e) {
@@ -152,8 +156,13 @@ function Shell() {
         if (e.type === 'events') refetch();
         else if (e.type === 'calendars') void loadCalendars();
         else if (e.type === 'connection') {
+          // The stream reports the state each time it opens. The first report
+          // repeats what the app just loaded (unless HA was down then); any
+          // later one follows a reconnect, so there may be changes to catch up on.
+          const first = !streamReported.current;
+          streamReported.current = true;
           setHaConnected(e.connected);
-          if (e.connected) {
+          if (e.connected && (!first || haAtBoot.current === false)) {
             refetch();
             void loadInfo();
           }
@@ -190,9 +199,13 @@ function Shell() {
   }, [loadCalendars, loadInfo]);
 
   // Refetch when the set of visible calendars or their colours change.
-  const calKey = useMemo(() => (calendars ?? []).map((c) => `${c.entity_id}:${c.visible}:${c.color}`).join(','), [calendars]);
+  // FullCalendar fetches on its own when it first appears, so skip the first list.
+  const calKey = useMemo(() => calendars?.map((c) => `${c.entity_id}:${c.visible}:${c.color}`).join(',') ?? null, [calendars]);
+  const fetchedKey = useRef<string | null>(null);
   useEffect(() => {
-    cal.current?.refetch();
+    if (calKey === null) return;
+    if (fetchedKey.current !== null && fetchedKey.current !== calKey) void cal.current?.refetch();
+    fetchedKey.current = calKey;
   }, [calKey]);
 
   // The calendar list as a docked panel (wide) or a sliding drawer (narrow).

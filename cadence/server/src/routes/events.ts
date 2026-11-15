@@ -89,7 +89,7 @@ export function eventRoutes(app: FastifyInstance, ctx: Ctx) {
       const start = str(req.query.start, 'start', 40);
       const end = str(req.query.end, 'end', 40);
       if (Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) throw new ApiError(400, 'invalid_request', 'invalid range');
-      const ids = req.query.calendars ? req.query.calendars.split(',').filter(Boolean) : (await ctx.ha.listCalendars()).map((c) => c.entity_id);
+      const ids = req.query.calendars ? req.query.calendars.split(',').filter(Boolean) : (await ctx.live.list()).map((c) => c.entity_id);
       const results = await Promise.allSettled(ids.map((id) => ctx.ha.getEvents(id, start, end)));
       const events: CadenceEvent[] = [];
       const errors: { entity_id: string; message: string }[] = [];

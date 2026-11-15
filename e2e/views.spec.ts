@@ -110,7 +110,8 @@ test('changes made in Home Assistant appear without reloading', async ({ page })
   const name = `From HA ${test.info().project.name}`;
   const start = new Date(Date.now() + 2 * 3600e3);
   await haCommand({ type: 'calendar/event/create', entity_id: 'calendar.work', event: { summary: name, dtstart: start.toISOString(), dtend: new Date(start.getTime() + 3600e3).toISOString() } });
-  await expect(page.locator('.fc-list-event', { hasText: name })).toBeVisible({ timeout: 10_000 });
+  // Late in the day the event runs past midnight and Agenda lists it under both days.
+  await expect(page.locator('.fc-list-event', { hasText: name }).first()).toBeVisible({ timeout: 10_000 });
   void isPhone;
 });
 

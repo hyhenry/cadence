@@ -123,7 +123,8 @@ test('calendars from other integrations cannot be deleted from Cadence', async (
   const res = await h.inject({ method: 'DELETE', url: '/api/calendars/calendar.work_google' });
   assert.equal(res.statusCode, 400);
   assert.equal(res.json().error, 'not_removable');
-  const c = (await cals()).find((x) => x.entity_id === 'calendar.work_google');
+  // The list is kept from HA's state_changed events, so the new calendar shows up a moment later.
+  const c = await until(async () => (await cals()).find((x) => x.entity_id === 'calendar.work_google'));
   assert.equal(c.removable, false);
   assert.equal(c.kind, 'other');
 });

@@ -14,6 +14,8 @@ export class LiveHub {
   private rewindow: NodeJS.Timeout | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private syncing: Promise<void> | null = null;
+  private again: { rewindow: boolean } | null = null;
+  private synced = false;
   private stopped = false;
   calendars: HaCalendar[] = [];
   private readonly ha: HaClient;
@@ -69,18 +71,47 @@ export class LiveHub {
     for (const c of this.clients) this.send(c, type, data);
   }
 
-  /** Re-read the calendar list and make the per-calendar subscriptions match it. */
+  /**
+   * The calendar list from the last sync. Reading it fresh downloads every
+   * entity state and the whole entity registry from HA, which on a large
+   * install is slow, so only do that before the first sync. Don't wait for
+   * the socket then: once it connects, the sync tells browsers to reload the list.
+   */
+  list(): Promise<HaCalendar[]> {
+    return this.synced ? Promise.resolve(this.calendars) : this.ha.listCalendars({ wait: false });
+  }
+
+  /**
+   * Re-read the calendar list and make the per-calendar subscriptions match it.
+   * A call made while a sync is running gets one more pass afterwards (that
+   * sync may have read the list before the change), and resolves after it.
+   */
   resync(rewindow = false): Promise<void> {
-    if (this.syncing) return this.syncing;
-    this.syncing = this.doResync(rewindow)
-      .catch((err) => this.log.warn(`live resync failed: ${(err as Error).message}`))
-      .finally(() => (this.syncing = null));
+    if (this.syncing) {
+      this.again = { rewindow: rewindow || !!this.again?.rewindow };
+      return this.syncing;
+    }
+    this.syncing = (async () => {
+      let rw = rewindow;
+      for (;;) {
+        await this.doResync(rw).catch((err) => this.log.warn(`live resync failed: ${(err as Error).message}`));
+        if (!this.again || this.stopped) break;
+        rw = this.again.rewindow;
+        this.again = null;
+      }
+    })().finally(() => {
+      this.syncing = null;
+      this.again = null;
+    });
     return this.syncing;
   }
 
   private async doResync(rewindow: boolean) {
     const before = JSON.stringify(this.calendars);
     this.calendars = await this.ha.listCalendars();
+    // If the registry could not be read no calendar has an integration; keep
+    // reading the list fresh rather than serving that until the next sync.
+    this.synced = this.calendars.length === 0 || this.calendars.some((c) => c.platform !== null);
     this.store.ensureMeta(this.calendars.map((c) => c.entity_id));
     if (JSON.stringify(this.calendars) !== before) this.broadcast('calendars');
     if (!this.stateSub) {

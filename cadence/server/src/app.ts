@@ -14,7 +14,7 @@ import { reminderRoutes } from './routes/reminders.ts';
 import { Store } from './store/db.ts';
 
 /** Keep in step with `version` in config.yaml (checked by test/config.test.ts). */
-export const VERSION = '0.1.7';
+export const VERSION = '0.1.8';
 
 export interface BuildOptions {
   config: AppConfig;
