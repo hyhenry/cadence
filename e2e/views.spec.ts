@@ -11,6 +11,27 @@ test('loads through the ingress prefix with relative paths', async ({ page }) =>
   expect(bad).toEqual([]);
 });
 
+test('coming back after the Ingress session lapsed waits for HA to renew it instead of failing', async ({ page }) => {
+  await open(page);
+  // HA Ingress turns requests away with a plain-text 401 until HA's frontend
+  // renews the ingress_session cookie.
+  let refused = 0;
+  await page.route('**/api/**', (r) => {
+    if (r.request().url().endsWith('/api/stream')) return r.abort();
+    refused++;
+    return r.fulfill({ status: 401, contentType: 'text/plain', body: '401: Unauthorized' });
+  });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(() => refused).toBeGreaterThan(0);
+  await page.waitForTimeout(1500);
+  await page.unroute('**/api/**');
+  const events = page.waitForResponse((r) => r.url().includes('/api/events') && r.status() === 200);
+  await events;
+  await expect(page.getByTestId('calendar')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await expect(page.getByText('session has ended')).toHaveCount(0);
+});
+
 test('switches between month, week, 3-day, day and agenda views', async ({ page }) => {
   await open(page);
   await setView(page, 'Month');

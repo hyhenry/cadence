@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.12
+
+- Coming back to Cadence after leaving it open for a while no longer shows "Request failed (401)". Home Assistant's login for the app can run out while the tab is in the background or the phone is asleep. Cadence now waits for Home Assistant to renew it, then loads your events.
+- If Home Assistant doesn't renew it within about a minute, a banner says the session has ended and offers a Reload button.
+
 ## 0.1.11
 
 - Reminder notifications show the event's real time again. In Alberta, which no longer changes its clocks from November 2026, they showed times an hour early (8:30 for a 9:30 event).

@@ -1,7 +1,7 @@
 import type { DatesSetArg } from '@fullcalendar/core';
 import { DateTime } from 'luxon';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, subscribeLive, type CadenceEvent, type Calendar, type EventInput, type Info, type Settings } from './api/client.ts';
+import { api, ApiError, onSessionChange, SESSION_EXPIRED_MESSAGE, subscribeLive, type CadenceEvent, type Calendar, type EventInput, type Info, type Settings } from './api/client.ts';
 import { AddCalendarSheet, CalendarSheet } from './calendars/CalendarSheets.tsx';
 import { Drawer } from './calendars/Drawer.tsx';
 import { Icon } from './components/Sheet.tsx';
@@ -77,6 +77,19 @@ function initialView(s: Settings, phone: boolean): ViewName {
 
 const isRecurringInstance = (e: CadenceEvent) => !!e.rrule && !!e.recurrence_id;
 
+/**
+ * Reload Home Assistant around the app, not just the app: HA's page is what
+ * creates the Ingress session. Falls back to the app alone when it runs on
+ * its own (or the parent is not reachable).
+ */
+function reloadAll() {
+  try {
+    window.top!.location.reload();
+  } catch {
+    location.reload();
+  }
+}
+
 function Shell() {
   const toast = useToast();
   const [info, setInfo] = useState<Info | null>(null);
@@ -88,6 +101,7 @@ function Shell() {
   const haAtBoot = useRef<boolean | null>(null);
   const streamReported = useRef(false);
   const [serverReachable, setServerReachable] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [title, setTitle] = useState('');
   const [view, setView] = useState<ViewName | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -102,7 +116,8 @@ function Shell() {
     try {
       setCalendars(await api.calendars());
     } catch (e) {
-      toast((e as Error).message, { kind: 'error' });
+      // Background reloads: the session banner already says why they fail.
+      if ((e as ApiError).code !== 'session_expired') toast((e as Error).message, { kind: 'error' });
     }
   }, [toast]);
 
@@ -186,11 +201,21 @@ function Shell() {
         }
       },
     );
+    // HA's Ingress session ran out and was not renewed in time (see SESSION_RETRY_MS).
+    // If HA renews it after all, catch up on what the failed requests missed.
+    const stopSession = onSessionChange((expired) => {
+      setSessionExpired(expired);
+      if (!expired) {
+        refetch();
+        void loadCalendars();
+      }
+    });
     const onVis = () => document.visibilityState === 'visible' && (refetch(), void loadCalendars());
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', onVis);
     return () => {
       stop();
+      stopSession();
       clearTimeout(timer);
       clearTimeout(lostTimer);
       document.removeEventListener('visibilitychange', onVis);
@@ -295,6 +320,7 @@ function Shell() {
 
   const fail = (err: unknown, undo?: () => void) => {
     undo?.();
+    if ((err as ApiError).code === 'session_expired') return toast('Your change was not saved. Reload the page and try again.', { kind: 'error' });
     toast((err as Error).message || 'Home Assistant rejected the change.', { kind: 'error' });
   };
 
@@ -381,7 +407,7 @@ function Shell() {
     [tz],
   );
 
-  const onLoadError = useCallback((m: string) => toast(m, { kind: 'error' }), [toast]);
+  const onLoadError = useCallback((m: string) => m !== SESSION_EXPIRED_MESSAGE && toast(m, { kind: 'error' }), [toast]);
 
   // Keyboard shortcuts (ignored while typing or when a sheet is open).
   const overlayOpen = !!overlay || !!scope;
@@ -496,7 +522,15 @@ function Shell() {
             )}
           </div>
         </header>
-        {!serverReachable && (
+        {sessionExpired && (
+          <div className="banner banner-action" role="alert">
+            <span>{SESSION_EXPIRED_MESSAGE}</span>
+            <button type="button" className="text-btn" onClick={reloadAll}>
+              Reload
+            </button>
+          </div>
+        )}
+        {!sessionExpired && !serverReachable && (
           <div className="banner" role="alert">
             Lost connection to the calendar. Retrying…
           </div>

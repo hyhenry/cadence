@@ -288,6 +288,18 @@ kbd {
   padding: 8px 16px;
   font-size: 0.9rem;
 }
+.banner-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.banner-action span {
+  flex: 1;
+}
+.banner-action .text-btn {
+  color: inherit;
+  font-weight: 600;
+}
 :root[data-theme='dark'] .banner {
   background: #3a2a10;
   color: #ffd79a;

@@ -77,17 +77,60 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Waits between retries of a request that HA Ingress turned away with a 401.
+ *
+ * The Cadence server never answers 401 (it reports HA's own refusals as 502),
+ * so a 401 means the request never got past Ingress: the `ingress_session`
+ * cookie has lapsed. The HA frontend around the app renews that cookie every
+ * 60 s, and right away when its tab becomes visible again. But after 5 minutes
+ * hidden it suspends its connection, and a sleeping phone runs no timers, so
+ * the session (15 min) can run out. Coming back, the app's own refetch races
+ * HA's reconnect and renewal. Retrying, writes included (they never reached
+ * Cadence), covers the reconnect and one more keepalive tick: about 75 s.
+ */
+export const SESSION_RETRY_MS = [1000, 2000, 4000, 8000, 15_000, 15_000, 15_000, 15_000];
+
+export const SESSION_EXPIRED_MESSAGE = 'Your Home Assistant session has ended. Reload the page to continue.';
+
+let sessionExpired = false;
+const sessionListeners = new Set<(expired: boolean) => void>();
+function setSessionExpired(expired: boolean) {
+  if (sessionExpired === expired) return;
+  sessionExpired = expired;
+  for (const l of sessionListeners) l(expired);
+}
+
+/** Called with true when Ingress keeps refusing requests, and false once one gets through again. */
+export function onSessionChange(cb: (expired: boolean) => void): () => void {
+  sessionListeners.add(cb);
+  return () => sessionListeners.delete(cb);
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
-  try {
-    res = await fetch(`api/${path}`, {
-      method,
-      headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new ApiError(0, 'offline', 'The calendar is not reachable. Check your connection.');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(`api/${path}`, {
+        method,
+        headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new ApiError(0, 'offline', 'The calendar is not reachable. Check your connection.');
+    }
+    if (res.status !== 401) break;
+    // Once given up, later requests fail fast instead of each waiting 75 s.
+    if (sessionExpired || attempt >= SESSION_RETRY_MS.length) {
+      setSessionExpired(true);
+      throw new ApiError(401, 'session_expired', SESSION_EXPIRED_MESSAGE);
+    }
+    await res.body?.cancel().catch(() => undefined);
+    await wait(SESSION_RETRY_MS[attempt]);
   }
+  setSessionExpired(false);
   const text = await res.text();
   let data: any = null;
   try {
@@ -170,6 +213,7 @@ export function subscribeLive(onEvent: (e: LiveEvent) => void, onStatus?: (ok: b
     src.addEventListener('connection', (ev) => onEvent({ type: 'connection', connected: !!parse(ev as MessageEvent).connected }));
     src.onopen = () => {
       delay = 3000;
+      setSessionExpired(false); // it got through Ingress
       onStatus?.(true);
     };
     src.onerror = () => {
